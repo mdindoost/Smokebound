@@ -152,18 +152,29 @@ describe('what you may say', () => {
     ).resolves.toBeTruthy();
   });
 
-  it('also refuses a body that would burst the schema’s code-point cap', async () => {
+  it('refuses a body that would burst the storage bound (REDTEAM F20)', async () => {
     life = await createLifecycle();
-    const cap = CONFIG.get('message.char_cap');
-    // 280 family emoji: 280 characters to a reader, 1,960 code points to the
-    // database's `char_length(body) <= 280`. The engine refuses it cleanly
-    // rather than letting the insert fail on a constraint.
-    const body = '👨‍👩‍👧‍👦'.repeat(cap);
+    // 280 emoji now fit; 2,001 code points do not. The gameplay cap is the
+    // grapheme count, the column bound is only a guard against absurdity.
+    await expect(
+      sendMessage(life.ctx, {
+        senderId: PEOPLE.alice.id,
+        recipientId: PEOPLE.bob.id,
+        body: '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}'.repeat(CONFIG.get('message.char_cap')),
+      }),
+    ).resolves.toBeTruthy();
+
     const error = await expectError(
-      sendMessage(life.ctx, { senderId: PEOPLE.alice.id, recipientId: PEOPLE.bob.id, body }),
+      sendMessage(life.ctx, {
+        senderId: PEOPLE.alice.id,
+        recipientId: PEOPLE.bob.id,
+        // 250 clusters, but each is a long combining sequence: legal by the cap,
+        // too big for the column.
+        body: 'a\u0301\u0302\u0303\u0304\u0305\u0306\u0307\u0308\u0309'.repeat(250),
+      }),
       'BODY_TOO_LONG',
     );
-    expect(error.details).toMatchObject({ unit: 'code_points', cap });
+    expect(error.details).toMatchObject({ unit: 'storage', bound: 2000 });
   });
 
   it('refuses an empty message', async () => {

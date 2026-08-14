@@ -63,6 +63,13 @@ export interface WeatherPassStats {
   alerted: number;
   /** Active severe alerts that arrived without geometry, so could not be matched. */
   unmatchedAlerts: number;
+  /**
+   * Age in minutes of the alert list this pass planned against, or null when we
+   * had none at all. An outage un-walls the sky (fail-open, REDTEAM F4) and this
+   * is how that becomes visible rather than silent (REDTEAM F23) — surface it in
+   * the nightly report.
+   */
+  alertStalenessMinutes: number | null;
 }
 
 const DEFAULT_CONCURRENCY = 4;
@@ -95,6 +102,7 @@ export class WeatherCache {
     degraded: false,
     alerted: 0,
     unmatchedAlerts: 0,
+    alertStalenessMinutes: null,
   };
 
   constructor(options: WeatherCacheOptions) {
@@ -152,6 +160,7 @@ export class WeatherCache {
       degraded: this.degradedUntil !== null && this.degradedUntil.getTime() > now.getTime(),
       alerted: 0,
       unmatchedAlerts: 0,
+      alertStalenessMinutes: null,
     };
 
     const results: CellWeather[] = [];
@@ -222,7 +231,12 @@ export class WeatherCache {
     this.log(
       `weather: ${stats.cached} cached, ${stats.fetched} fetched, ${stats.stale} stale, ` +
         `${stats.failOpen} fail-open, ${stats.ocean} unroutable, ${stats.alerted} alerted` +
-        `${stats.degraded ? ' (degraded)' : ''}`,
+        `${stats.degraded ? ' (degraded)' : ''}` +
+        (stats.alertStalenessMinutes === null
+          ? ' [alerts: NONE — the sky is un-walled]'
+          : stats.alertStalenessMinutes > 0
+            ? ` [alerts: ${stats.alertStalenessMinutes.toFixed(0)} min stale]`
+            : ''),
     );
 
     return snapshotFrom(results);
@@ -254,6 +268,11 @@ export class WeatherCache {
         this.alerts = null;
       }
     }
+
+    stats.alertStalenessMinutes =
+      this.alerts === null
+        ? null
+        : (now.getTime() - this.alerts.fetchedAt.getTime()) / 60_000;
 
     const severe = (this.alerts?.list ?? []).filter((alert) => isSevereAlert(alert, now));
     // Zone-based alerts (many watches) carry no polygon, so they cannot be matched

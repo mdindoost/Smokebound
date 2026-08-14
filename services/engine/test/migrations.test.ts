@@ -141,15 +141,19 @@ describe('schema constraints', () => {
     );
   });
 
-  it('caps a message body at 280 characters (MECHANICS §5)', async () => {
+  it('bounds a message body for sanity, not as the cap (REDTEAM F20)', async () => {
     const insert = (body: string) =>
       t.db.query(
         `insert into public.messages (sender, recipient, body, origin_cell, dest_cell)
          values ($1, $2, $3, 'r037c090', 'r039c066')`,
         [alice, bob, body],
       );
-    await expect(insert('x'.repeat(280))).resolves.toBeDefined();
-    await expect(insert('x'.repeat(281))).rejects.toThrow();
+
+    // The 280-grapheme cap lives in the engine; the column only stops absurdity.
+    // 280 family emoji are 1,960 code points and must fit.
+    await expect(insert('👨‍👩‍👧‍👦'.repeat(280))).resolves.toBeDefined();
+    await expect(insert('x'.repeat(2000))).resolves.toBeDefined();
+    await expect(insert('x'.repeat(2001))).rejects.toThrow();
   });
 
   it('rejects malformed cell ids', async () => {

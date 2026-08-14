@@ -26,6 +26,8 @@ import { messagesInStates, recordEvent, updateMessage } from '../db/repo.js';
 export interface DissipationStats {
   eligible: number;
   lost: number;
+  /** Stranded at their own fire, and therefore exempt (REDTEAM F22). */
+  tended: number;
 }
 
 /** Per-run dissipation probability implied by the per-day config value. */
@@ -41,17 +43,26 @@ export async function runDissipation(ctx: EngineContext): Promise<DissipationSta
   const now = ctx.clock.now();
   const graceHours = ctx.config.get('stranded.grace_hours');
   const chance = perRunDissipationChance(ctx.config);
-  const stats: DissipationStats = { eligible: 0, lost: 0 };
+  const stats: DissipationStats = { eligible: 0, lost: 0, tended: 0 };
 
   for (const message of await messagesInStates(ctx.db, ['STRANDED'])) {
     if (message.stranded_since === null) continue;
     const strandedFor = hoursBetween(new Date(message.stranded_since), now);
     if (strandedFor < graceHours) continue; // no loss from stranding alone for 24 h
 
+    // A tended fire never dies (REDTEAM F22): smoke that never left its own cell
+    // has someone standing next to it. Only weather out on the route takes a
+    // message. This also removes the game's worst outcome — a local storm eating
+    // a message before it ever travelled.
+    const cell = message.stranded_cell ?? message.origin_cell;
+    if (cell === message.origin_cell) {
+      stats.tended++;
+      continue;
+    }
+
     stats.eligible++;
     if (!rollChance(ctx.rng, chance)) continue;
 
-    const cell = message.stranded_cell ?? message.origin_cell;
     await updateMessage(ctx.db, message.id, {
       state: 'LOST',
       lostAt: now,

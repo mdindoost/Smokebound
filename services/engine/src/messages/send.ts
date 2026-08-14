@@ -40,6 +40,12 @@ import { toSegmentEtas } from '../routing/astar.js';
 
 const KM_PER_MILE = 1.609344;
 
+/**
+ * Mirrors the `messages_body_check` bound in the schema (REDTEAM F20). Not a
+ * gameplay number — the gameplay cap is `message.char_cap` in mechanics_config.
+ */
+const STORAGE_BOUND_CHARS = 2000;
+
 export interface PreviewRequest {
   senderId: Uuid;
   recipientId: Uuid;
@@ -120,21 +126,17 @@ async function validateParties(
   if (length === 0) throw new EngineError('BODY_EMPTY', 'A signal needs something to say.');
   if (length > cap) throw bodyTooLong(length, cap);
 
-  // The cap is enforced twice, in two different units, because the spec defines
-  // it in two different units and both are load-bearing:
-  //   * grapheme clusters — what a person sees and what garbling operates on
-  //     (MECHANICS §5, §6.2), checked above;
-  //   * code points — what `char_length(body) <= 280` counts in the schema
-  //     (ARCHITECTURE §3), checked here.
-  // For plain text they are the same number. For emoji and combining scripts
-  // they are not, and a body that passed the first check can still be rejected
-  // by the database. Better a clear refusal than a constraint violation.
-  const codePoints = [...body].length;
-  if (codePoints > cap) {
+  // REDTEAM F20: grapheme clusters are the only user-facing unit, and the check
+  // above is the authoritative gate. The database keeps a much looser bound
+  // purely to stop absurd payloads, so a legal message can never trip it — but
+  // refusing here beats a constraint violation if someone ever tightens it.
+  // Measured in code points, which is what Postgres `char_length` counts.
+  const storageLength = [...body].length;
+  if (storageLength > STORAGE_BOUND_CHARS) {
     throw new EngineError(
       'BODY_TOO_LONG',
-      `That message is ${length} characters but ${codePoints} code points; the store caps it at ${cap}.`,
-      { length, codePoints, cap, unit: 'code_points' },
+      `That message is ${storageLength} characters of storage; the store caps it at ${STORAGE_BOUND_CHARS}.`,
+      { length, storageLength, bound: STORAGE_BOUND_CHARS, unit: 'storage' },
     );
   }
 

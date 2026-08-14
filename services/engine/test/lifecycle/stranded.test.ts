@@ -6,7 +6,7 @@
  * it transmit, and still has a message waiting for the weather to turn.
  */
 
-import { neighbors } from '@smoke/shared';
+import { formatCellId, neighbors } from '@smoke/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { runDeliveryCheck } from '../../src/crons/deliveryCheck.js';
@@ -161,13 +161,15 @@ describe('dissipation (MECHANICS §6.1)', () => {
 
     // Inserted directly: this is a test of the dissipation roll, not of the send
     // path, and 200 sends would trip the daily rate limit twenty times over.
+    // Stranded out on the route, not at home — a tended fire never dies (F22).
     const population = 200;
     const strandedSince = life.clock.now().toISOString();
+    const outThere = formatCellId({ row: 38, col: 80 });
     for (let i = 0; i < population; i++) {
       await life.ctx.db.query(
         `insert into public.messages
            (sender, recipient, body, state, origin_cell, dest_cell, stranded_since, stranded_cell, created_at)
-         values ($1, $2, $3, 'STRANDED', $4, $5, $6, $4, $6)`,
+         values ($1, $2, $3, 'STRANDED', $4, $5, $6, $7, $6)`,
         [
           PEOPLE.alice.id,
           PEOPLE.bob.id,
@@ -175,6 +177,7 @@ describe('dissipation (MECHANICS §6.1)', () => {
           PEOPLE.alice.home,
           PEOPLE.bob.home,
           strandedSince,
+          outThere,
         ],
       );
     }
@@ -197,14 +200,21 @@ describe('dissipation (MECHANICS §6.1)', () => {
 
   it('records where and why a message died, and tells the sender', async () => {
     life = await createLifecycle({ rng: { next: () => 0 } }); // every roll lands
-    life.nws.setSevereOver(neighbors(PEOPLE.alice.home));
     const sent = await sendMessage(life.ctx, {
       senderId: PEOPLE.alice.id,
       recipientId: PEOPLE.bob.id,
       body: 'THE LAST ONE',
     });
-    life.clock.advanceMinutes(1);
-    await runDeliveryCheck(life.ctx);
+
+    // Strand it out on the route: only weather away from home can take a
+    // message (REDTEAM F22).
+    const strandedCell = formatCellId({ row: 38, col: 80 });
+    await life.ctx.db.query(
+      `update public.messages
+          set state = 'STRANDED', stranded_since = $2, stranded_cell = $3
+        where id = $1`,
+      [sent.messageId, life.clock.now().toISOString(), strandedCell],
+    );
 
     life.clock.advanceHours(25);
     const stats = await runDissipation(life.ctx);
@@ -212,7 +222,7 @@ describe('dissipation (MECHANICS §6.1)', () => {
 
     const message = await getMessage(life.ctx.db, sent.messageId);
     expect(message!.state).toBe('LOST');
-    expect(message!.lost_cell).toBe(PEOPLE.alice.home);
+    expect(message!.lost_cell).toBe(strandedCell);
     expect(message!.lost_reason).toBe('dissipated');
     expect(message!.lost_at).not.toBeNull();
     expect(message!.body_delivered).toBeNull(); // it never arrived
