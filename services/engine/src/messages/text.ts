@@ -48,7 +48,21 @@ export interface GarbleResult {
  * variants, never exceeding the legibility cap. Deterministic for a given `rng`,
  * so a delivered message can always be explained.
  */
-export function garbleText(text: string, rng: Rng, config: MechanicsConfig): GarbleResult {
+export interface GarbleOptions {
+  /**
+   * Hard ceiling on clusters this roll may take, used to spend a *message-wide*
+   * damage budget (MECHANICS §6.2: "never garble below legibility"). Without it
+   * a route through a dozen gale cells compounds 10% at a time into mush.
+   */
+  maxClusters?: number;
+}
+
+export function garbleText(
+  text: string,
+  rng: Rng,
+  config: MechanicsConfig,
+  options: GarbleOptions = {},
+): GarbleResult {
   const clusters = graphemes(text);
   if (clusters.length === 0) return { text, charsHit: 0 };
 
@@ -59,7 +73,11 @@ export function garbleText(text: string, rng: Rng, config: MechanicsConfig): Gar
   );
   const cap = Math.floor(clusters.length * config.get('garble.legibility_cap_fraction'));
   const wanted = Math.ceil(clusters.length * fraction);
-  const count = Math.max(0, Math.min(wanted, Math.max(cap, 1), clusters.length));
+  const budget = options.maxClusters ?? clusters.length;
+  const count = Math.max(
+    0,
+    Math.min(wanted, Math.max(cap, 1), clusters.length, Math.max(0, budget)),
+  );
   if (count === 0) return { text, charsHit: 0 };
 
   const targets = new Set<number>();

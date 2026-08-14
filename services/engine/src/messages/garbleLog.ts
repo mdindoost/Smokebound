@@ -13,7 +13,7 @@ import type { MechanicsConfig, Uuid } from '@smoke/shared';
 
 import { seededRng } from '../engine/rng.js';
 import type { GarbleEventRow } from '../db/repo.js';
-import { garbleText } from './text.js';
+import { garbleText, graphemes } from './text.js';
 
 export interface GarbleReplay {
   text: string;
@@ -30,10 +30,21 @@ export function replayGarbles(
   let text = body;
   const hits: number[] = [];
 
+  // The legibility cap is a promise about the *message*, not about one gale
+  // (MECHANICS §6.2). A route through a dozen gale cells rolls many times, and
+  // 10% compounded a dozen times is not a wind-damaged message, it is confetti —
+  // so the damage comes out of one budget for the whole flight.
+  const budget = Math.max(
+    1,
+    Math.floor(graphemes(body).length * config.get('garble.legibility_cap_fraction')),
+  );
+  let spent = 0;
+
   for (const [index, event] of events.entries()) {
     const rng = seededRng(`${messageId}:${event.cell}:${index}`);
-    const result = garbleText(text, rng, config);
+    const result = garbleText(text, rng, config, { maxClusters: budget - spent });
     text = result.text;
+    spent += result.charsHit;
     hits.push(result.charsHit);
   }
 

@@ -7,22 +7,30 @@
     "start": "expo start",
     "ios": "expo start --ios",
     "android": "expo start --android",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@smoke/shared": "*",
+    "@supabase/supabase-js": "^2.112.3",
     "expo": "~57.0.13",
     "expo-constants": "~57.0.11",
     "expo-linking": "~57.0.6",
+    "expo-location": "^57.0.10",
     "expo-router": "~57.0.13",
+    "expo-secure-store": "^57.0.1",
     "expo-status-bar": "~57.0.1",
     "react": "~19.2.0",
     "react-native": "0.87.0",
     "react-native-safe-area-context": "~5.9.0",
-    "react-native-screens": "~4.27.0"
+    "react-native-screens": "~4.27.0",
+    "react-native-url-polyfill": "^4.0.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.5",
+    "@smoke/engine": "^0.1.0",
     "@types/react": "~19.2.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^4.1.10"
   }
 }

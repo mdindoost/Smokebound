@@ -84,3 +84,11 @@ export { startCrons, runAllCronsOnce } from './crons/scheduler.js';
 
 export * from './transport/index.js';
 export * as repo from './db/repo.js';
+
+// --- test support (used by the engine's own tests and the app's e2e run) -----
+export {
+  createTestDatabase,
+  createUser as createTestUser,
+  createFlock as createTestFlock,
+} from './testing/database.js';
+export type { TestDatabase, SupabaseRole } from './testing/database.js';

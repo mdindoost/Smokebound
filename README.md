@@ -11,11 +11,11 @@ The design documents are the source of truth, in this order of authority:
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Stack, data model, services, milestones |
 | [REDTEAM.md](REDTEAM.md) | Decisions already litigated — do not re-open |
 
-**Current milestone: M3 — Lifecycle (complete).** M1 built the monorepo, cell math,
-schema and config seeding; M2 the weather cache and A* router; M3 the whole message
-lifecycle — preview/send/resend over two transports, the delivery/replan/dissipation
-crons, garble, The Keeper, and an event log for every transition. No UI yet: that is
-M4/M5 (ARCHITECTURE §10).
+**Current milestone: M4 — Client shell (complete).** M1 built the monorepo, cell math,
+schema and config seeding; M2 the weather cache and A* router; M3 the message lifecycle;
+M4 the app around it — onboarding, flock and the safety surface, compose with a route
+preview, the Ledger, and a parchment/ember/sky design system. **No map yet:** the Sky, the
+radar overlay and the flight animation are M5 (ARCHITECTURE §10).
 
 ---
 
@@ -23,7 +23,7 @@ M4/M5 (ARCHITECTURE §10).
 
 ```
 smoke/
-  apps/mobile/          # Expo + TypeScript + Expo Router (scaffold only so far)
+  apps/mobile/          # Expo + TypeScript + Expo Router: the client shell and design system
   services/engine/      # Node + TypeScript: migrations, seeding, weather cache, A* router
   packages/shared/      # cell math, land mask, data-model types, the MECHANICS.md transcription
   supabase/migrations/  # SQL migrations (Supabase CLI layout)
@@ -41,11 +41,18 @@ npm install
 ## Run the tests
 
 ```bash
-npm test                              # shared + engine
+npm test                              # every workspace
 npm test --workspace packages/shared  # cell math, land mask, mechanics, model    (101 tests)
-npm test --workspace services/engine  # schema, RLS, weather, router, lifecycle   (279 tests)
+npm test --workspace services/engine  # schema, RLS, weather, router, lifecycle   (292 tests)
+npm test --workspace apps/mobile      # client logic + two-client end-to-end       (40 tests)
 npm run typecheck                     # all workspaces
 ```
+
+The mobile suite includes a **two-client end-to-end run**: two `DataGateway`s (the same
+interface the screens use) against real migrations, real RLS and the real engine, with a
+shortened config so a Newark→Chicago flight takes minutes. It covers send → transmitting →
+in flight → delivered from both sides, a wind-damaged delivery, the block flow and the
+Keeper's reply.
 
 The engine tests boot a real Postgres in-process ([PGlite](https://pglite.dev)), apply
 the actual migration files, and then probe the RLS policies as each party — so
@@ -75,8 +82,10 @@ config keys this build no longer knows about.
 
 ### What the schema gives you
 
-Tables exactly as ARCHITECTURE §3 specifies: `profiles`, `flock`, `blocks`, `messages`,
-`reports`, `weather_cells`, `mechanics_config`, `events`. RLS is on for all of them:
+Tables as ARCHITECTURE §3 specifies — `profiles`, `flock`, `blocks`, `messages`,
+`reports`, `weather_cells`, `mechanics_config`, `events` — plus `keeper_lines` and the
+`engine_requests`/`engine_responses` pair the table transport runs on. RLS is on for all
+of them:
 
 - **profiles** — readable by yourself and your flock (pending or accepted); a block
   hides you from the other party in both directions. Handle search for adding friends
@@ -86,7 +95,8 @@ Tables exactly as ARCHITECTURE §3 specifies: `profiles`, `flock`, `blocks`, `me
   the product rule from SPEC §4 ("you get nothing until the smoke arrives").
 - **flock** — only the addressee can flip a request from `pending` to `accepted`; either
   party can unfriend.
-- **blocks** — visible to the blocker only.
+- **blocks** — visible to the blocker only, who can still see the profile of anyone they
+  blocked (you already know who they are; the block hides *you* from *them*).
 - **weather_cells / mechanics_config** — readable by any signed-in user (the map and the
   compose screen need them), writable only by the engine.
 - **engine_requests / engine_responses** — a client may queue a request under its own id
@@ -233,17 +243,38 @@ built from the message id — so a mangled message can always be explained after
 operates on whole grapheme clusters, tested against Latin, Arabic, CJK, Devanagari and
 emoji fixtures.
 
-## Running the app
+## apps/mobile
 
 ```bash
+cp .env.example .env      # EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY
 npm start --workspace apps/mobile
 ```
 
-M1 ships the Expo Router scaffold and a placeholder route only — enough to boot, nothing
-to look at. Screens are M4/M5.
+Screens (ARCHITECTURE §7): sign-in → handle → fire → the Keeper, then the Ledger, a
+thread, compose, flock and settings. The route preview is **text** in M4 — distance, time
+in the air, storms dodged, and the "you could just walk over" line when the two fires are
+close enough (MECHANICS §7.1). M5 turns those same numbers into a map.
+
+**Transport.** The app talks to the engine through `engine_requests` / `engine_responses`
+by default (realtime, with a polling fallback), because the beta engine runs on a home
+server behind NAT. `EXPO_PUBLIC_ENGINE_TRANSPORT=http` swaps in the HTTP client behind the
+same interface.
+
+**Design system.** `src/design/tokens.ts` holds the whole palette — parchment (ground),
+ember (fire, the only colour that raises its voice), sky (distance and weather) — plus the
+type scale and the component set the screens are assembled from. It is deliberately the
+base M5 draws the map inside. SPEC §2's cultural design rule is binding on all of it: the
+identity comes from material and light, never from the iconography of a people, and the
+in-app history page credits the practice the app borrows from.
+
+**One thing the client cannot do:** show a recipient that something is on its way. RLS
+hides an undelivered message from its recipient entirely (ARCHITECTURE §3), which is also
+the product (SPEC §4.4 — "you get nothing until the smoke arrives"). An ambient "a signal
+is in the sky toward you" hint would need a deliberate design decision about what to
+expose, so it is an open M5 question rather than something M4 quietly weakened a policy
+for.
 
 ## What is next
 
-- **M4 — Client shell:** auth, profiles, flock, compose with preview, the Ledger (no map).
 - **M5 — The Sky:** map, radar overlay, flight animation, loss screen. The demo milestone.
 - **M6 — Ship prep:** push wiring, settings, icons, EAS build, TestFlight. See ARCHITECTURE §10.

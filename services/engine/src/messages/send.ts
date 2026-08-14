@@ -153,11 +153,14 @@ async function validateParties(
   if ((await flockStatusBetween(ctx.db, senderId, recipientId)) !== 'accepted') throw notFlock();
 
   const recipientIsKeeper = ctx.keeperId !== null && recipientId === ctx.keeperId;
+  const senderIsKeeper = ctx.keeperId !== null && senderId === ctx.keeperId;
 
+  // The Keeper has no fixed address: its fire is always one cell from *yours*
+  // (REDTEAM F5), so every user gets a real send→track→deliver loop on day one.
+  // That holds in both directions — its reply comes back from the same hill it
+  // was received on, not from the placeholder cell in its profile row.
   return {
-    senderHome: sender.home_cell,
-    // The Keeper has no fixed address: its fire is always one cell from yours
-    // (REDTEAM F5), so every user gets a real send→track→deliver loop on day one.
+    senderHome: senderIsKeeper ? keeperCellFor(recipient.home_cell) : sender.home_cell,
     recipientHome: recipientIsKeeper ? keeperCellFor(sender.home_cell) : recipient.home_cell,
     recipientIsKeeper,
   };

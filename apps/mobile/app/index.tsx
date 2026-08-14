@@ -1,17 +1,35 @@
 /**
- * Placeholder route.
- *
- * Expo Router needs at least one route to boot, so this exists purely to make
- * `npm start -w apps/mobile` run. It is not a product screen and carries no
- * design intent — the Sky home screen is M5 (ARCHITECTURE §7, §10).
+ * The gate: send you where you actually are in the story.
  */
 
-import { Text, View } from 'react-native';
+import { Redirect } from 'expo-router';
+import { View } from 'react-native';
 
-export default function Placeholder() {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>SMOKE — M1 scaffold. No screens yet.</Text>
-    </View>
-  );
+import { Body, Display } from '../src/design/components.js';
+import { colors, spacing } from '../src/design/tokens.js';
+import { useSession } from '../src/lib/session.js';
+
+export default function Index() {
+  const { stage } = useSession();
+
+  if (stage === 'loading') {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: spacing.sm,
+        }}
+      >
+        <Display tone="accent">SMOKE</Display>
+        <Body tone="faint">lighting the fire…</Body>
+      </View>
+    );
+  }
+
+  if (stage === 'signed-out') return <Redirect href="/sign-in" />;
+  if (stage === 'needs-profile') return <Redirect href="/onboarding/handle" />;
+  return <Redirect href="/ledger" />;
 }
