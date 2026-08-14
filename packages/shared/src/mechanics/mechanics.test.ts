@@ -21,9 +21,15 @@ describe('mechanics defaults mirror MECHANICS.md', () => {
     expect(MECHANICS_DEFAULTS['weather.degraded_cache_ttl_minutes']).toBe(60);
   });
 
-  it('§2 speed', () => {
-    expect(MECHANICS_DEFAULTS['speed.base_mph']).toBe(20);
+  it('§2 speed — km/h is canonical, mph is deprecated flavor (REDTEAM F12)', () => {
     expect(MECHANICS_DEFAULTS['speed.base_kmh']).toBe(32);
+    expect(MECHANICS_SPEC['speed.base_kmh'].deprecated).toBeUndefined();
+    expect(MECHANICS_DEFAULTS['speed.base_mph']).toBe(20);
+    expect(MECHANICS_SPEC['speed.base_mph'].deprecated).toBe(true);
+    // The two are not the same speed, which is exactly why only one may be used.
+    expect(MECHANICS_DEFAULTS['speed.base_mph'] * 1.609344).not.toBe(
+      MECHANICS_DEFAULTS['speed.base_kmh'],
+    );
   });
 
   it('§2.1 weather multipliers, with severe-only impassability (REDTEAM F2)', () => {
@@ -131,7 +137,7 @@ describe('mechanics defaults mirror MECHANICS.md', () => {
     }
     // The five numbers MECHANICS §8 flags as most likely to move must be tunable.
     for (const key of [
-      'speed.base_mph',
+      'speed.base_kmh', // canonical; speed.base_mph is deprecated display copy (REDTEAM F12)
       'delivery.min_floor_minutes',
       'garble.gale_chance',
       'routing.replan_interval_minutes',

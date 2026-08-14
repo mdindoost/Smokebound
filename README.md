@@ -11,9 +11,10 @@ The design documents are the source of truth, in this order of authority:
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Stack, data model, services, milestones |
 | [REDTEAM.md](REDTEAM.md) | Decisions already litigated — do not re-open |
 
-**Current milestone: M1 — Foundations (complete).** Monorepo, cell math, shared types,
-Supabase schema + RLS, `mechanics_config` seeding. No weather, no routing, no UI yet;
-those are M2–M5 (ARCHITECTURE §10).
+**Current milestone: M2 — Engine core (complete).** M1 gave us the monorepo, cell math,
+shared types, Supabase schema + RLS and `mechanics_config` seeding. M2 adds the weather
+cache and the A* router. No send pipeline, no crons, no UI yet — those are M3–M5
+(ARCHITECTURE §10).
 
 ---
 
@@ -21,9 +22,9 @@ those are M2–M5 (ARCHITECTURE §10).
 
 ```
 smoke/
-  apps/mobile/          # Expo + TypeScript + Expo Router (scaffold only in M1)
-  services/engine/      # Node + TypeScript: migrations, seeding; router/crons land in M2/M3
-  packages/shared/      # cell math, data-model types, the MECHANICS.md transcription
+  apps/mobile/          # Expo + TypeScript + Expo Router (scaffold only so far)
+  services/engine/      # Node + TypeScript: migrations, seeding, weather cache, A* router
+  packages/shared/      # cell math, land mask, data-model types, the MECHANICS.md transcription
   supabase/migrations/  # SQL migrations (Supabase CLI layout)
   supabase/local/       # test-harness SQL — never applied to a real project
 ```
@@ -40,8 +41,8 @@ npm install
 
 ```bash
 npm test                              # shared + engine
-npm test --workspace packages/shared  # cell math, mechanics, data model  (90 tests)
-npm test --workspace services/engine  # migrations, RLS, seeding          (61 tests)
+npm test --workspace packages/shared  # cell math, land mask, mechanics, model   (99 tests)
+npm test --workspace services/engine  # migrations, RLS, seeding, weather, router (183 tests)
 npm run typecheck                     # all workspaces
 ```
 
@@ -143,6 +144,51 @@ rule (MECHANICS §1).
 bisects wherever the sampling produced a diagonal jump, so the returned path is
 contiguous (every consecutive pair is 8-connected) and identical at any sampling rate.
 
+### The land mask
+
+`packages/shared/src/geo/generated/landMask.ts` is generated data: a per-cell land/water
+bitmap rasterised from Natural Earth 1:10m polygons (MECHANICS §1.1). It exists because
+fail-open weather would otherwise make the Atlantic the cheapest terrain on the map and
+route coastal messages out to sea (REDTEAM F13). Traversable = land, or within one cell of
+land; everything else is open ocean and permanently impassable.
+
+Regenerate it only when the grid changes — the mask records the grid signature it was
+built against and refuses to load against a different one:
+
+```bash
+npm run generate:land-mask --workspace packages/shared
+```
+
+## services/engine
+
+```ts
+import { WeatherCache, HttpNwsClient, SqlWeatherStore, planRoute } from '@smoke/engine';
+
+const cache = new WeatherCache({
+  client: new HttpNwsClient({ userAgent: '(smoke, you@example.com)' }), // NWS requires contact info
+  store: new SqlWeatherStore(db),
+  config,                                    // loaded from mechanics_config
+});
+
+const weather = await cache.getCorridorWeather(originCell, destCell);
+const route = planRoute({ origin: originCell, dest: destCell, weather, config });
+// → { status: 'OK', route, waypoints, totalHours, unknownCells, expanded } | { status: 'NO_ROUTE', reason }
+```
+
+**Weather cache** (ARCHITECTURE §6.1): TTL from config, batched and jittered fetches, and
+fail-open everywhere — stale data is served for up to 2×TTL during an NWS outage, and past
+that a cell is treated as clear and flagged `weather_unknown`. A cell is impassable only
+under an *active severe warning or watch*; an ordinary thunderstorm is 6.0× slow and
+passable (REDTEAM F2). Open ocean is never fetched at all. All NWS access sits behind the
+`NwsClient` interface; no test touches the network.
+
+**Router** (ARCHITECTURE §6.2): 8-connected A*, pure function of
+(origin, dest, weather, config). Edge cost is
+`(hop_km / speed.base_kmh) × weather_mult × wind_mult` — every multiplier acts on *time*
+(REDTEAM F11) — and the heuristic is `great_circle_km × 0.7 / speed.base_kmh`, the distance
+flown at full tailwind, which the test suite checks against a Dijkstra reference on random
+weather fields.
+
 ## Running the app
 
 ```bash
@@ -154,6 +200,5 @@ to look at. Screens are M4/M5.
 
 ## What is next
 
-- **M2 — Engine core:** NWS weather cache (mocked in tests), A* router, storm fixtures.
 - **M3 — Lifecycle:** send/preview endpoints, crons, full state machine, garble, dissipation.
 - **M4 — Client shell**, **M5 — The Sky**, **M6 — Ship prep**. See ARCHITECTURE §10.

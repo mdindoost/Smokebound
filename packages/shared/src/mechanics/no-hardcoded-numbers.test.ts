@@ -19,6 +19,8 @@ import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+import { MECHANICS_KEYS, MECHANICS_SPEC } from './defaults.js';
+
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = join(HERE, '..', '..', '..', '..');
 
@@ -82,6 +84,37 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+/**
+ * Strip comments, keeping line numbering intact.
+ *
+ * Doc comments quote MECHANICS.md constantly — that is the point of them — so a
+ * guard that reads prose would cry wolf until someone disabled it. Only code
+ * counts, which means tracking block-comment state across lines.
+ */
+function codeOnly(source: string): string[] {
+  let inBlock = false;
+  return source.split('\n').map((line) => {
+    let out = '';
+    for (let i = 0; i < line.length; i++) {
+      if (inBlock) {
+        if (line.startsWith('*/', i)) {
+          inBlock = false;
+          i++;
+        }
+        continue;
+      }
+      if (line.startsWith('/*', i)) {
+        inBlock = true;
+        i++;
+        continue;
+      }
+      if (line.startsWith('//', i)) break;
+      out += line[i];
+    }
+    return out;
+  });
+}
+
 /** Matches the literal as a standalone number, not as part of a longer one. */
 function literalRegex(literal: string): RegExp {
   return new RegExp(`(?<![\\w.])${literal.replace('.', '\\.')}(?![\\d])`);
@@ -100,10 +133,8 @@ describe('ARCHITECTURE §10: gameplay numbers live only in mechanics_config seed
       for (const file of walk(join(REPO_ROOT, target.dir))) {
         const relPath = relative(REPO_ROOT, file);
         if (isExempt(relPath)) continue;
-        const lines = readFileSync(file, 'utf8').split('\n');
-        lines.forEach((line, i) => {
-          // Comments may quote the spec; only code counts.
-          const code = line.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '');
+        const lines = codeOnly(readFileSync(file, 'utf8'));
+        lines.forEach((code, i) => {
           for (const literal of target.forbidden) {
             if (literalRegex(literal).test(code)) {
               violations.push(`${relPath}:${i + 1} contains gameplay literal ${literal}`);
@@ -113,6 +144,31 @@ describe('ARCHITECTURE §10: gameplay numbers live only in mechanics_config seed
       }
     }
 
+    expect(violations).toEqual([]);
+  });
+
+  it('never reads a deprecated config key from computation code', () => {
+    // REDTEAM F12: speed.base_kmh is canonical; the mph value is display copy.
+    const deprecated = MECHANICS_KEYS.filter((k) => MECHANICS_SPEC[k].deprecated === true);
+    expect(deprecated).toContain('speed.base_mph');
+
+    const violations: string[] = [];
+    for (const target of SCAN_TARGETS) {
+      for (const file of walk(join(REPO_ROOT, target.dir))) {
+        const relPath = relative(REPO_ROOT, file);
+        // The mechanics module itself declares the key (type, validator, seed);
+        // the rule is about code that *consumes* a value.
+        if (isExempt(relPath) || relPath.includes(join('src', 'mechanics'))) continue;
+        codeOnly(readFileSync(file, 'utf8'))
+          .forEach((code, i) => {
+            for (const key of deprecated) {
+              if (code.includes(`'${key}'`) || code.includes(`"${key}"`)) {
+                violations.push(`${relPath}:${i + 1} reads deprecated key ${key}`);
+              }
+            }
+          });
+      }
+    }
     expect(violations).toEqual([]);
   });
 

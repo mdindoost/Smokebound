@@ -90,11 +90,17 @@ export const MECHANICS_SPEC = {
   // --- MECHANICS §2 · speed ----------------------------------------------
   'speed.base_mph': {
     value: 20,
+    tune: false,
+    deprecated: true,
+    source: 'MECHANICS §2 / REDTEAM F12',
+    note: 'UI flavor copy only ("20 mph"). Never compute from this — 20 mph is 32.19 km/h, not 32.',
+  },
+  'speed.base_kmh': {
+    value: 32,
     tune: true,
     source: 'MECHANICS §2',
-    note: 'The single most important number in the app (MECHANICS §8.1).',
+    note: 'Canonical base speed and the single most important number in the app (MECHANICS §8.1).',
   },
-  'speed.base_kmh': { value: 32, tune: true, source: 'MECHANICS §2' },
   'speed.walking_mph': {
     value: 3,
     tune: false,

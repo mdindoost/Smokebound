@@ -164,7 +164,10 @@ export interface WeatherCell {
   /** Bucketed NWS condition; see `WeatherCondition` in the mechanics types. */
   condition: string | null;
   wind_mph: number | null;
-  /** Degrees the wind is blowing *toward*, clockwise from true north. */
+  /**
+   * Meteorological convention, as NWS reports it: degrees the wind blows *from*,
+   * clockwise from true north. A 270 wind is a westerly, pushing smoke east.
+   */
   wind_dir: number | null;
   /** Precomputed from the MECHANICS §2.1 table at fetch time. */
   time_mult: number | null;

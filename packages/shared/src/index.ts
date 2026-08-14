@@ -9,6 +9,7 @@
 export * from './geo/types.js';
 export * from './geo/grid.js';
 export * from './geo/greatCircle.js';
+export * from './geo/land.js';
 export * from './mechanics/types.js';
 export * from './mechanics/defaults.js';
 export * from './mechanics/config.js';

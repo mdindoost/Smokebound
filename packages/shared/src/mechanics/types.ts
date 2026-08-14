@@ -64,7 +64,12 @@ export interface MechanicsValues {
   'weather.severe_alert_impassable': boolean;
 
   // --- MECHANICS §2 · speed ----------------------------------------------
+  /**
+   * @deprecated Display copy only. `speed.base_kmh` is canonical (REDTEAM F12);
+   * no computation may read this key.
+   */
   'speed.base_mph': number;
+  /** Canonical base speed. Every duration in the system derives from this. */
   'speed.base_kmh': number;
   /** Walking estimate for the proximity footnote (MECHANICS §7.1). */
   'speed.walking_mph': number;
@@ -141,6 +146,8 @@ export interface MechanicsEntryMeta {
   /** Document + section this number is defined by. */
   readonly source: string;
   readonly note?: string;
+  /** Still seeded for display code, but no computation may read it. */
+  readonly deprecated?: boolean;
 }
 
 export type MechanicsSpec = {
