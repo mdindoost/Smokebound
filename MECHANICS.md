@@ -85,6 +85,10 @@ not by weather:
 
 - Before travel begins, the fire "transmits" the message puff-by-puff:
   `transmission_time = 3 s × ceil(chars / 4)` → 280 chars ≈ **3.5 min** of visible puffing at the origin. (TUNE)
+- **`chars` means grapheme clusters**, here and everywhere else in this document
+  (§5, §6.2). One emoji is one puff; so is one Devanagari cluster. Counting code
+  units or code points would make the same message cost three times as long to
+  transmit in Hindi as in English.
 - v1: purely time + animation (no encoding choice). v2 splits into Express/Certified modes.
 - Design intent: nudges terse, telegram-style writing; makes long messages feel costly without being punitive.
 
@@ -108,12 +112,35 @@ not by weather:
 ## 5. Message constraints
 
 - **280-char cap.** Rationale: bounds transmission time (§3), bounds garble damage (§6.2), fits parchment UI, and is an on-brand joke (a tweet by smoke).
+- **A "char" is a grapheme cluster** — what a reader would call a character, and what
+  the counter in the compose screen shows. 280 emoji is a legal message; so is 280
+  Devanagari syllables. The engine is the authoritative gate: it counts clusters and
+  refuses at 281.
+- The database stores a **2,000-character sanity bound** rather than 280, because
+  Postgres counts code points and a legal 280-cluster message can be several times
+  longer in those units. That bound is a guard against absurd payloads, not a
+  gameplay rule; the gameplay rule lives in `mechanics_config.message.char_cap`.
 
 ## 6. Failure & drama states
 
 ### 6.1 Stranded
 - Trigger: next cell impassable (§4). No message loss from stranding itself for the first **24 h**.
 - After 24 h continuously stranded: **5%/day dissipation roll** → `LOST`. (TUNE — keep rare; losing messages must be memorable, not routine.)
+
+**A tended fire never dies.** Dissipation applies only to smoke stranded *out in the
+weather* — `stranded_cell ≠ origin_cell`. A message that never managed to leave its own
+fire waits indefinitely: someone is standing next to it, feeding it. Mechanically this
+also removes the worst outcome in the game (a local storm eating a message before it ever
+travelled); dramatically, it is the difference between smoke lost over Ohio and a fire
+still burning in your back yard.
+
+**Stranding is eventually consistent, and that is the intended feel.** Weather is fetched
+lazily (§1), so against a storm line larger than the fetched corridor the router will
+commit a route toward a gap it has not looked at yet, fly toward it, and strand on
+approach when the next cell turns out to be closed. Smoke discovering the wall by
+reaching it is more honest than an omniscient server refusing to let it leave — and it
+is self-correcting: each replan cycle fetches more of the sky. Do not "fix" this by
+pre-fetching the whole grid.
 
 ### 6.2 Garbled (wind damage)
 - Trigger: traversing a gale cell (§2.2). Roll once per gale cell: **35%** chance to garble. (TUNE)

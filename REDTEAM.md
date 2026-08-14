@@ -91,5 +91,25 @@ Findings raised while implementing M1, ruled on and patched into the docs.
 
 ---
 
+# Addendum — M3 architect review (rulings)
+
+## F20 — The 280 cap was defined in two incompatible units (MEDIUM, correctness)
+**Attack:** MECHANICS §5 says "280 characters" and §6.2 makes grapheme clusters the unit; the schema said `char_length(body) <= 280`, which counts code points. 280 family emoji are 280 characters to a reader and 1,960 to Postgres, so a legal message could be rejected by a constraint — and the same sentence cost three times as much "length" in Hindi as in English.
+**Resolution:** **Grapheme clusters are canonical everywhere user-facing** — validation, the compose counter, transmission time, and garble. The schema bound is raised to **2,000** as a sanity guard on absurd payloads, and the **engine is the authoritative 280-grapheme gate**. (MECHANICS §3, §5; ARCHITECTURE §3, §7 patched; migration `20260814150500_body_sanity_bound.sql`.)
+
+## F21 — Stranding is eventually consistent against unbounded storms (LOW, accepted as intended)
+**Attack:** Weather is fetched lazily, so a storm line larger than the fetched corridor lets the router commit toward a gap it has not looked at. The message flies at the wall and strands on approach rather than being held back at once.
+**Resolution:** **Intended behaviour, documented rather than fixed.** Smoke discovering a wall by reaching it is more honest than an omniscient server, and each replan cycle fetches more sky, so it is self-correcting. The fix that would remove it — pre-fetching the whole grid every plan — trades the entire lazy-fetch design for a cosmetic gain. (MECHANICS §6.1 patched.)
+
+## F22 — Origin-stranded messages could be eaten by dissipation (MEDIUM, product)
+**Attack:** A local storm over the sender's own cell strands the message at home; 24 hours later it starts rolling for loss. The worst outcome in the game — a message destroyed before it ever travelled — was reachable without the smoke going anywhere.
+**Resolution:** **A tended fire never dies.** Dissipation applies only when `stranded_cell ≠ origin_cell`; origin-stranded messages wait indefinitely for the sky to open. Someone is standing next to that fire, feeding it. (MECHANICS §6.1, ARCHITECTURE §4, §6.3 patched.)
+
+## F23 — An alerts outage silently un-walls the sky (LOW, observability)
+**Attack:** If the alerts endpoint is unreachable past the stale window the engine assumes no alerts, so nothing is impassable and no message strands — correct under fail-open (F4), but invisible.
+**Resolution:** Fail-open stays. The engine records **alert staleness** — the age of the newest usable alert list — as a metric surfaced in the nightly report. Silent un-walling is the thing to avoid; visible un-walling is acceptable. (ARCHITECTURE §6.1 patched.)
+
+---
+
 ## Verdict
 No unresolved severe findings. F1 and F5 were the two that would have materially hurt launch; both are now v1 scope. Design is cleared for Phase 3 (implementation).

@@ -82,7 +82,9 @@ create table messages (
   id uuid primary key default gen_random_uuid(),
   sender uuid references profiles(id),
   recipient uuid references profiles(id),
-  body text not null check (char_length(body) <= 280),
+  body text not null check (char_length(body) <= 2000),  -- sanity bound, not the cap;
+                                         -- the 280-GRAPHEME cap is enforced by the engine
+                                         -- (MECHANICS §5, REDTEAM F20)
   body_delivered text,                   -- post-garble text; null until delivered
   state text not null default 'TRANSMITTING'
     check (state in ('TRANSMITTING','IN_FLIGHT','STRANDED','DELIVERED','LOST')),
@@ -134,6 +136,11 @@ STRANDED ──(dissipation roll succeeds)──────> LOST
 IN_FLIGHT ──(final waypoint eta reached)────> DELIVERED   [apply garbles → body_delivered]
 ```
 
+**Stranded at the origin is a special case.** A message that never left its own fire
+(`stranded_cell = origin_cell`) is exempt from dissipation and waits indefinitely — a
+tended fire never dies (MECHANICS §6.1). Only smoke stranded out in the weather can be
+taken by it.
+
 **A send never fails for want of a route.** If the router returns `NO_ROUTE` — the sky is
 walled off, or the recipient's own cell is under a severe warning — the message is still
 created and still transmits; it simply strands at its origin and the replan cron retries
@@ -157,6 +164,7 @@ grace (MECHANICS §6.1) starts when it strands, wherever it stranded.
 - `getCellWeather(cells[])`: serve from `weather_cells` if `fetched_at` < TTL; else fetch NWS gridpoint forecast for cell center, map condition → `time_mult`/`impassable` per MECHANICS §2.1, upsert. Batch, jittered, rate-limit aware. **Fail-open:** on 429/5xx/timeout serve stale; beyond 2×TTL treat as clear + `weather_unknown` (MECHANICS §2.1). Impassable requires an *active NWS severe warning/watch* (alerts endpoint), not just a stormy forecast.
 - **Never fetch a non-traversable cell** (MECHANICS §1.1): open ocean and foreign land have no weather because they have no route. Fail-open must not turn the Atlantic — or Ontario — into a clear-sky highway.
 - **Alerts are fetched in bulk, not per cell.** One active-alerts request per pass covers the whole launch region; cells are matched against alert geometry locally. Per-cell alert lookups multiply request volume by the size of the corridor for no extra information.
+- **An alerts outage un-walls the sky, on purpose.** If the alerts endpoint is down past the stale window we assume no alerts rather than freezing every route (fail-open, REDTEAM F4) — the failure mode we refuse is "our dependency stranded the whole network". The cost is that during such an outage nothing is impassable, so the engine records **alert staleness** (how old the newest usable alert list is) as a metric and surfaces it in the nightly report. Silent un-walling is the thing to avoid; visible un-walling is acceptable.
 
 ### 6.2 Router
 - A* over the 8-connected grid.
@@ -172,7 +180,7 @@ grace (MECHANICS §6.1) starts when it strands, wherever it stranded.
 - **The Keeper** (F5): system profile, `home_cell` computed as adjacent to each new user at onboarding (per-user virtual position). First-run flow prompts a message to The Keeper; engine auto-replies with rotating era-flavored lines ~30 min after delivery. Plain data + one cron branch — no LLM, no cost.
 - **delivery-check (1 min):** promote TRANSMITTING→IN_FLIGHT when departed; advance `current_leg` past due waypoints; on gale-cell traversal roll garble (record event); on final eta → DELIVERED, apply garbles to produce `body_delivered`, push.
 - **replan (15 min):** for IN_FLIGHT, check next cell impassable → STRANDED (+push). For STRANDED, attempt reroute from `stranded_cell`; success → IN_FLIGHT (+push "skies cleared").
-- **dissipation (1 h):** STRANDED > 24 h → roll per MECHANICS §6.1 → LOST (+push, loss screen payload).
+- **dissipation (1 h):** STRANDED > 24 h **and stranded away from its origin** → roll per MECHANICS §6.1 → LOST (+push, loss screen payload). Origin-stranded messages are skipped: a tended fire never dies.
 
 ### 6.4 API surface (thin — most reads go straight to Supabase)
 ```
@@ -204,7 +212,7 @@ Everything else (flock CRUD, message list, flight state) = Supabase client + RLS
 ## 7. Client screens (maps to UX spec, forthcoming)
 
 1. **Sky (home):** map, your flock's smoke in flight, radar overlay toggle.
-2. **Compose:** recipient picker → text (280 live counter) → **route preview** (route line, storms, ETA) → confirm "Light the fire."
+2. **Compose:** recipient picker → text (280 live counter, counting grapheme clusters) → **route preview** (route line, storms, ETA) → confirm "Light the fire."
 3. **Flight view:** per-message map, animated smoke along route, event timeline (parchment ledger), ETA.
 4. **The Ledger:** conversation history; wind-damaged text rendered with ember styling.
 5. **Flock:** add by handle / invite link; pending requests as drifting wisps.

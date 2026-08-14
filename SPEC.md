@@ -39,7 +39,7 @@ Your message travels across a live map as a smoke signal, routed around real sto
 - Settings, privacy policy, coarse-location-only
 
 ### v1.1 (2–4 weeks post-launch — second press beat)
-- **Relays / signal hills**: active users' cells discount routing; "a signal is passing through your territory" notification; tend-the-fire tap to boost
+- **Relays — the Tower model**: the sky is re-fictionalized as a network of system-owned beacon towers (the smoke already hops cell to cell; towers make it visible and historically honest — line-of-sight station chains, Great Wall style). Baseline delivery = tower-to-tower, always available (cold-start rule preserved: no human ever required). **Human "signal hills"** are faster than towers (a tended fire beats an unmanned beacon) and, at scale, bypass tower queues — congestion on popular corridors is relieved by users, so growth speeds the network up rather than slowing it down. "A signal is passing through your territory" + tend-the-fire tap. Queue/congestion mechanics activate only past a traffic threshold (invisible before scale). Cosmetic tower layer (route waypoints, "passed the Allegheny tower at 3:12 AM" timeline lines) ships early in M5 at zero mechanics cost.
 - **"Come to the fire"**: textless summons for nearby flock — "[handle] has lit a fire nearby. Come." + map pin; the campus/meetup mechanic (great for GSA/NJIT beta events)
 - Android release
 
@@ -87,9 +87,9 @@ Every one of these must look good enough to post:
 - Messages stored server-side (not E2E) — say so plainly in policy.
 - Guideline 4.2 defense: live routing, real weather integration, custom map experience = demonstrably more than "minimum functionality."
 
-## 9. Open questions (to resolve in red-team)
+## 9. Open questions (resolved in red-team — kept for the record)
 
-- GPS spoofing: does teleporting yourself matter? (Probably harmless-fun; decide.) → **Closed** (REDTEAM F9): unmitigated in v1.
-- Home-location vs live-location for routing endpoints (privacy vs realism). → **Closed** (REDTEAM F6): manual-refresh `home_cell`, never live location.
+- GPS spoofing: does teleporting yourself matter? → **Closed** (REDTEAM F9): unmitigated in v1; harmless in a friends-only messenger. Revisit if public signal fires (v2) ship.
+- Home-location vs live-location for routing endpoints (privacy vs realism). → **Closed** (REDTEAM F6): manual-refresh `home_cell`, never live location. Flock members can see your approximate (city-scale) area — that IS the product, and the privacy policy says so plainly.
 - What happens when recipient has no location set (never opened app after invite)? → **Closed:** it cannot happen. `home_cell` is set during onboarding, before a flock request can be accepted, and a message can only be sent to *accepted* flock. Every recipient therefore has a cell by construction; the schema enforces it (`profiles.home_cell NOT NULL`). A stale cell is fine — the registration cell is the documented fallback (MECHANICS §4).
 - Server cost ceiling before monetization exists. → **Closed** (REDTEAM F9, MECHANICS §9): inside hobby tiers; Supabase Pro ($25/mo) is the pressure valve.
