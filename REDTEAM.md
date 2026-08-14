@@ -1,0 +1,49 @@
+# SMOKE — Red-Team Review v1.0 (Phase 2)
+
+Adversarial pass over SPEC.md / MECHANICS.md / ARCHITECTURE.md. Each finding: severity, attack, resolution, and where it was patched.
+
+---
+
+## F1 — App Store rejection: missing block/report (SEVERE, would fail review)
+**Attack:** SMOKE is a user-generated-content app. Apple guideline 1.2 requires UGC apps to have: a mechanism to report offensive content, a mechanism to block abusive users, and published contact info for moderation. We had none. This is a hard rejection, not a maybe.
+**Resolution:** Block user + report message + unfriend are now **v1 requirements** (SPEC §3), `blocks` table + report flow added (ARCHITECTURE §3, §8). Moderation contact goes on the landing page.
+
+## F2 — Summer thunderstorms would break the game (HIGH, gameplay)
+**Attack:** MECHANICS made every thunderstorm cell impassable. It's August: mesoscale convective systems routinely wall off multi-state regions daily. Result: most cross-country messages strand repeatedly, many exceed 24 h stranded, dissipation losses become routine. Losing messages must be memorable, not Tuesday.
+**Resolution:** Split severity — ordinary thunderstorm = 6.0× slowdown (slow, dramatic, passable); **impassable only when an NWS severe warning/watch is active** for the cell. Storms stay scary, the Midwest stays traversable. (MECHANICS §2.1 patched.)
+
+## F3 — A* heuristic is inadmissible under tailwind (MEDIUM, correctness)
+**Attack:** Heuristic was `great_circle / base_speed`, but tailwind allows effective speed up to `base / 0.7` — so the heuristic can overestimate remaining cost, breaking A* optimality (suboptimal routes shown as "the" route).
+**Resolution:** Heuristic divides by the max possible speed: `great_circle / (base_speed / 0.7)`. Admissible again. (ARCHITECTURE §6.2 patched.)
+
+## F4 — NWS API flakiness could strand the whole network (HIGH, availability)
+**Attack:** api.weather.gov throws 500s and slow responses regularly. If missing weather blocks routing (fail-closed), an NWS outage strands every in-flight message simultaneously — a systemwide event caused by our dependency, not the sky.
+**Resolution:** **Fail-open**: stale-beyond-TTL or unfetchable cells are treated as clear (1.0×) and flagged `weather_unknown`; never strand on missing data, only on confirmed severe weather. Serve stale aggressively on 429/5xx. (MECHANICS §1, ARCHITECTURE §6.1 patched.)
+
+## F5 — The first-session dead-air problem (HIGH, retention)
+**Attack:** New user installs, adds one friend in another state, sends… and nothing happens for 36 hours. First session ends with zero payoff; day-one churn. Carrier Pidge survives this because cross-town delivery is seconds; our 10-min floor helps only if your friend is nearby.
+**Resolution:** **The Keeper** — a system flock member whose fire is always 1 cell away. Onboarding prompts your first message to The Keeper (delivery ≈ 10–60 min) and it replies with era-appropriate flavor. Every user gets a full send→track→deliver loop on day one regardless of where their friends live. (SPEC §3 v1, ARCHITECTURE §7 patched.) Beta must still validate the long-haul feel (MECHANICS §8 tuning order unchanged).
+
+## F6 — Recipient location inference (MEDIUM, privacy — accepted with mitigations)
+**Attack:** The route preview reveals the recipient's ~50 km cell to any accepted flock member; "move your fire" updates could let a hostile "friend" coarsely track relocation.
+**Resolution (accept + mitigate):** Friends-only by design; endpoint is manual-refresh `home_cell` (never live location); privacy policy states plainly that flock members can see your approximate (city-scale) area — that IS the product. "Come to the fire" (v1.1) will require per-use confirmation before sharing a meet pin. Revisit hard if public signal fires (v2) ship.
+
+## F7 — Cultural respect risk (MEDIUM, reputational)
+**Attack:** Smoke signals are living heritage for Native American nations (and others). A joke app that leans on Hollywood-Indian iconography invites a justified backlash story instead of a fun-trend story.
+**Resolution:** Explicit design rule (SPEC §2 note): visual identity draws on parchment/ember/sky and the *worldwide* history — Chinese beacon towers, Polybius' torches, Aboriginal and Native American practice — with a respectful "history" page in-app crediting all of it. No feathers, no teepees, no faux-"Indian" naming or broken-English copy anywhere, ever. The research we did becomes the credibility asset.
+
+## F8 — Name clearance (LOW, logistics)
+"SMOKE" as an app name: crowded namespace, likely App Store collisions and weak trademark position. Action item (pre-M6): pick launch name + check App Store search, USPTO TESS, domain. Candidates to test: Smoke Signal, Signal Fire, Beacon, Puff. Working title stays SMOKE in docs.
+
+## F9 — Cost/scale spot-checks (LOW, verified fine)
+- Supabase free tier realtime caps ~200 concurrent — a viral spike exceeds it. Client already needs a polling fallback for reliability; upgrade to Pro ($25/mo) is the pressure valve. Acceptable.
+- Push volume, A* CPU, weather calls: all inside hobby tiers (MECHANICS §9). No blockers.
+- GPS spoofing (teleporting your fire): harmless in a friends-only app; consciously unmitigated in v1 (SPEC §9 closed).
+
+## F10 — Invite friction (accepted)
+Flock-only messaging means: invite → install → accept → send. Three steps before first real message. Accepted for v1 (The Keeper covers the gap; queued-sends-to-pending adds abuse surface for marginal gain). Revisit if beta shows invite drop-off.
+
+---
+
+## Verdict
+No unresolved severe findings. F1 and F5 were the two that would have materially hurt launch; both are now v1 scope. Design is cleared for Phase 3 (implementation).

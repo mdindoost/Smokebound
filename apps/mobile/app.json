@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "SMOKE",
+    "slug": "smoke",
+    "scheme": "smoke",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.smoke.app"
+    },
+    "android": {
+      "package": "com.smoke.app"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

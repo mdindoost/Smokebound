@@ -1,0 +1,24 @@
+{
+  "name": "smoke",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SMOKE — a messenger that delivers texts by virtual smoke signal (monorepo root)",
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build --workspace packages/shared && npm run build --workspace services/engine",
+    "test": "npm run test --workspace packages/shared && npm run test --workspace services/engine",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:migrate": "npm run db:migrate --workspace services/engine",
+    "db:seed": "npm run seed --workspace services/engine"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

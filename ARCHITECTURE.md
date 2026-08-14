@@ -1,0 +1,203 @@
+# SMOKE — Technical Architecture v0.1
+
+Companion to SPEC.md (product) and MECHANICS.md (all gameplay numbers — never hardcode them).
+Audience: Claude Code. Build milestone by milestone (§10); each milestone is independently runnable and testable.
+
+---
+
+## 1. Stack (locked)
+
+| Layer | Choice | Why |
+|---|---|---|
+| Client | React Native + **Expo** (TypeScript), Expo Router | Single codebase, EAS cloud builds (no Mac needed), strong Claude Code support |
+| Maps | react-native-maps + NWS radar tile overlay (`https://mapservices.weather.noaa.gov` tiles) | Free radar imagery |
+| Backend | **Supabase** (Postgres + Auth + Realtime) | Auth, DB, realtime subscriptions with minimal glue |
+| Routing/Jobs service | Small **Node (TypeScript) service** on Fly.io or Railway | A*, weather cache, replan cron, delivery cron, push dispatch |
+| Push | Expo Push Notifications | Simplest path with Expo |
+| Weather | NWS API (`api.weather.gov`) — free, keyless, US-only | v1 launch region |
+
+Monorepo layout:
+```
+smoke/
+  apps/mobile/          # Expo app
+  services/engine/      # Node routing+jobs service
+  packages/shared/      # shared TS types, mechanics types, cell math
+  SPEC.md  MECHANICS.md  ARCHITECTURE.md
+```
+
+## 2. System overview
+
+```
+[Expo client] ──auth/CRUD/realtime──> [Supabase Postgres]
+      │                                     ▲
+      │ (read-only flight state)            │ writes: routes, positions, states
+      ▼                                     │
+[MapView + radar tiles]            [engine service (Node)]
+                                      ├─ weather cache (NWS, per-cell, TTL 30m)
+                                      ├─ A* router
+                                      ├─ cron: replan (15m), delivery-check (1m), dissipation (1h)
+                                      └─ Expo push dispatch
+```
+Client never computes game state; it renders server truth. Position between waypoints is interpolated client-side from `segment_etas` for smooth animation — cosmetic only.
+
+## 3. Data model (Postgres)
+
+```sql
+-- Supabase auth.users is the identity root
+create table profiles (
+  id uuid primary key references auth.users,
+  handle text unique not null,          -- @name, 3-20 chars
+  display_name text,
+  home_cell text not null,              -- cell id, e.g. "r041c112" (coarse!)
+  last_active_at timestamptz,
+  expo_push_token text,
+  created_at timestamptz default now()
+);
+
+create table flock (                     -- friendships, symmetric
+  a uuid references profiles(id),
+  b uuid references profiles(id),
+  status text check (status in ('pending','accepted')),
+  requested_by uuid,
+  created_at timestamptz default now(),
+  primary key (a, b)                     -- store with a < b
+);
+
+create table blocks (                    -- App Store 1.2 requirement
+  blocker uuid references profiles(id),
+  blocked uuid references profiles(id),
+  created_at timestamptz default now(),
+  primary key (blocker, blocked)
+);
+
+create table reports (                   -- App Store 1.2 requirement
+  id bigserial primary key,
+  reporter uuid references profiles(id),
+  message_id uuid references messages(id),
+  reason text,
+  created_at timestamptz default now()
+);
+
+create table messages (
+  id uuid primary key default gen_random_uuid(),
+  sender uuid references profiles(id),
+  recipient uuid references profiles(id),
+  body text not null check (char_length(body) <= 280),
+  body_delivered text,                   -- post-garble text; null until delivered
+  state text not null default 'TRANSMITTING'
+    check (state in ('TRANSMITTING','IN_FLIGHT','STRANDED','DELIVERED','LOST')),
+  origin_cell text not null,
+  dest_cell text not null,
+  route jsonb,                           -- ordered cell ids
+  segment_etas jsonb,                    -- cumulative eta per waypoint (server truth)
+  current_leg int default 0,
+  departed_at timestamptz,
+  eta timestamptz,
+  stranded_since timestamptz,
+  stranded_cell text,
+  garble_events jsonb default '[]',      -- [{cell, at, chars_hit}]
+  lost_at timestamptz, lost_cell text, lost_reason text,
+  delivered_at timestamptz,
+  created_at timestamptz default now()
+);
+
+create table weather_cells (
+  cell text primary key,
+  condition text, wind_mph int, wind_dir int,
+  time_mult numeric,                     -- precomputed from MECHANICS table
+  impassable boolean default false,
+  fetched_at timestamptz
+);
+
+create table mechanics_config (          -- EVERY number from MECHANICS.md
+  key text primary key, value jsonb, updated_at timestamptz default now()
+);
+
+create table events (                    -- notification/event log per message
+  id bigserial primary key,
+  message_id uuid references messages(id),
+  kind text,                             -- SENT|DEPARTED|STRANDED|RESUMED|GARBLED|DELIVERED|LOST
+  payload jsonb, created_at timestamptz default now()
+);
+```
+
+RLS: profiles readable by flock members; messages readable by sender+recipient only; `body_delivered`/`body` visible to recipient **only after** `state='DELIVERED'` (sender always sees own body). weather_cells readable by all authenticated (needed for map rendering).
+
+## 4. Message state machine
+
+```
+TRANSMITTING ──(transmission_time elapsed)──> IN_FLIGHT
+IN_FLIGHT ──(next cell impassable @replan)──> STRANDED
+STRANDED ──(finite route found @replan)─────> IN_FLIGHT   [route replaced from current cell]
+STRANDED ──(dissipation roll succeeds)──────> LOST
+IN_FLIGHT ──(final waypoint eta reached)────> DELIVERED   [apply garbles → body_delivered]
+```
+- All transitions happen ONLY in the engine service crons — single writer, no client races.
+- `DELIVERED` and `LOST` are terminal. Re-send creates a new message row (thread by (sender,recipient)).
+
+## 5. Cell math (packages/shared)
+
+- Equirectangular 50 km grid over launch bbox (MECHANICS §1): `cellId(lat,lng)`, `cellCenter(id)`, `neighbors(id)` (8-connected), `cellsAlongGreatCircle(a,b)` for lazy weather prefetch.
+- Deterministic, pure, fully unit-tested — this module is the foundation everything trusts.
+
+## 6. Engine service
+
+### 6.1 Weather cache
+- `getCellWeather(cells[])`: serve from `weather_cells` if `fetched_at` < TTL; else fetch NWS gridpoint forecast for cell center, map condition → `time_mult`/`impassable` per MECHANICS §2.1, upsert. Batch, jittered, rate-limit aware. **Fail-open:** on 429/5xx/timeout serve stale; beyond 2×TTL treat as clear + `weather_unknown` (MECHANICS §2.1). Impassable requires an *active NWS severe warning/watch* (alerts endpoint), not just a stormy forecast.
+
+### 6.2 Router
+- A* over 8-connected grid. Edge cost hours = `cell_km / (base × weather_mult × wind_mult)`; diagonal = ×1.414 distance. Impassable = pruned. Heuristic: `great_circle_km / (base_speed / 0.7)` — divides by the **maximum achievable speed** (full tailwind boost) to remain admissible; using bare base_speed would overestimate under tailwind and break optimality.
+- Returns `{route, segment_etas, total_hours}` or `NO_ROUTE`.
+- Pure function of (origin, dest, weather snapshot) → property-testable with synthetic storm fixtures.
+
+### 6.3 Crons
+- **send pipeline** (on insert via Supabase webhook or poll): reject if either party blocks the other; compute route, set TRANSMITTING with `departed_at = now + transmission_time`.
+- **The Keeper** (F5): system profile, `home_cell` computed as adjacent to each new user at onboarding (per-user virtual position). First-run flow prompts a message to The Keeper; engine auto-replies with rotating era-flavored lines ~30 min after delivery. Plain data + one cron branch — no LLM, no cost.
+- **delivery-check (1 min):** promote TRANSMITTING→IN_FLIGHT when departed; advance `current_leg` past due waypoints; on gale-cell traversal roll garble (record event); on final eta → DELIVERED, apply garbles to produce `body_delivered`, push.
+- **replan (15 min):** for IN_FLIGHT, check next cell impassable → STRANDED (+push). For STRANDED, attempt reroute from `stranded_cell`; success → IN_FLIGHT (+push "skies cleared").
+- **dissipation (1 h):** STRANDED > 24 h → roll per MECHANICS §6.1 → LOST (+push, loss screen payload).
+
+### 6.4 API surface (thin — most reads go straight to Supabase)
+```
+POST /send        {recipient, body} → validates flock, computes route preview? No —
+POST /preview     {recipient, body} → {route, eta, storms_avoided[]}   (pre-send preview)
+POST /send        confirms with a preview token (route may be recomputed if stale >5m)
+POST /resend      {message_id} → new message, fresh route
+```
+Everything else (flock CRUD, message list, flight state) = Supabase client + RLS + realtime subscription on `messages` and `events`.
+
+## 7. Client screens (maps to UX spec, forthcoming)
+
+1. **Sky (home):** map, your flock's smoke in flight, radar overlay toggle.
+2. **Compose:** recipient picker → text (280 live counter) → **route preview** (route line, storms, ETA) → confirm "Light the fire."
+3. **Flight view:** per-message map, animated smoke along route, event timeline (parchment ledger), ETA.
+4. **The Ledger:** conversation history; wind-damaged text rendered with ember styling.
+5. **Flock:** add by handle / invite link; pending requests as drifting wisps.
+6. **Loss screen:** where it died, why, "light a new fire" re-send.
+7. Settings: location (coarse, on registration + manual refresh only), notifications, privacy, about.
+
+## 8. Privacy & security decisions
+
+- Location: request **coarse/approximate, when-in-use** only; store cell id only, never raw lat/lng. Endpoint = home_cell, refreshable manually ("move your fire").
+- GPS spoofing: unmitigated in v1 (harmless in a friends-only messenger; revisit if public signal fires ship).
+- No E2E claim anywhere; privacy policy states server-side storage plainly.
+- Rate limits: 30 sends/user/day (abuse + push-cost guard), 5 pending flock requests outbound.
+
+## 9. Testing strategy
+
+- `packages/shared`: exhaustive unit tests (cell math edge-of-bbox, antimeridian N/A for v1).
+- Router: fixture storms (wall, pocket, full blockade) → assert detour/strand behavior; property test: eta monotonic in weather severity.
+- Engine crons: time-travel tests with mocked clock (vitest fake timers) through full state machine.
+- Client: minimal — manual + Expo dev; the server owns all truth.
+- End-to-end happy path script: seed 2 users, send, fast-forward clock, assert DELIVERED with correct eta.
+
+## 10. Implementation milestones (Claude Code order)
+
+1. **M1 – Foundations:** monorepo, shared cell math + mechanics types, Supabase schema + RLS, config seeding from MECHANICS.md. *Test: cell math suite green; schema migrates clean.*
+2. **M2 – Engine core:** weather cache (NWS mocked in tests), A* router + storm fixtures. *Test: NJ→Chicago detours around synthetic PA storm wall.*
+3. **M3 – Lifecycle:** send/preview endpoints, crons, full state machine, garble/dissipation. *Test: e2e time-travel script.*
+4. **M4 – Client shell:** auth, profiles, flock, compose w/ preview, ledger (no map yet). *Test: two simulators exchange a fast-forwarded message.*
+5. **M5 – The Sky:** map, radar overlay, flight animation from segment_etas, loss screen. *The demo milestone.*
+6. **M6 – Ship prep:** push wiring end-to-end, settings/privacy, empty states, app icons/splash, EAS build profile, TestFlight upload.
+
+Rule for Claude Code: any gameplay number found hardcoded outside `mechanics_config` seeding is a bug.
