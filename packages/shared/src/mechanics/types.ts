@@ -99,6 +99,12 @@ export interface MechanicsValues {
   // --- MECHANICS §7B · delivery floor ------------------------------------
   'delivery.min_floor_minutes': number;
 
+  // --- ARCHITECTURE §6.4 · preview/send contract -------------------------
+  /** How long a preview's quoted route stays quotable. */
+  'preview.token_ttl_minutes': number;
+  /** ETA shift between preview and send that the user must be warned about. */
+  'preview.eta_shift_warn_fraction': number;
+
   // --- MECHANICS §6.1 · stranding & dissipation --------------------------
   'stranded.grace_hours': number;
   'stranded.dissipation_chance_per_day': number;

@@ -251,6 +251,36 @@ export function expandWithPadding(cells: Iterable<CellId>, rings: number): CellI
   return [...all];
 }
 
+/**
+ * Every cell inside the bounding box of the given cells.
+ *
+ * MECHANICS §1 defines lazy weather fetching as "cells inside the bounding boxes
+ * of in-flight routes (+1 cell padding)" — a box, not a line. The difference
+ * matters: fail-open prices unfetched cells as clear, so a corridor narrower
+ * than the box leaves the router an attractive unknown frontier to detour into.
+ */
+export function cellsInBoundingBox(cells: Iterable<CellId>): CellId[] {
+  let minRow = Infinity;
+  let maxRow = -Infinity;
+  let minCol = Infinity;
+  let maxCol = -Infinity;
+
+  for (const cell of cells) {
+    const { row, col } = parseCellId(cell);
+    if (row < minRow) minRow = row;
+    if (row > maxRow) maxRow = row;
+    if (col < minCol) minCol = col;
+    if (col > maxCol) maxCol = col;
+  }
+  if (minRow === Infinity) return [];
+
+  const out: CellId[] = [];
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) out.push(formatCellId({ row, col }));
+  }
+  return out;
+}
+
 /** Every cell id in the grid, row-major from the south-west corner. */
 export function allCells(): CellId[] {
   const out: CellId[] = [];

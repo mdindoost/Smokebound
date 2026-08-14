@@ -9,10 +9,14 @@
  * `--prune` also deletes keys this build no longer knows about.
  */
 
+import { cellId } from '@smoke/shared';
+
 import { seedMechanicsConfig } from '../src/seed/mechanics.js';
+import { ensureKeeper, KEEPER_HANDLE } from '../src/messages/keeper.js';
 import { connect } from './db.js';
 
 const prune = process.argv.includes('--prune');
+const withKeeper = process.argv.includes('--keeper');
 const { db, close, target } = await connect();
 
 try {
@@ -28,6 +32,13 @@ try {
     );
   }
   console.log('mechanics_config loads cleanly through the strict config loader.');
+
+  if (withKeeper) {
+    // Kansas City: a placeholder address. The Keeper's real position is computed
+    // per user, one cell from theirs (REDTEAM F5).
+    await ensureKeeper(db, cellId({ lat: 39.0997, lng: -94.5786 }));
+    console.log(`The Keeper (@${KEEPER_HANDLE}) and its flavour lines are seeded.`);
+  }
 } finally {
   await close();
 }

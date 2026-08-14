@@ -6,7 +6,14 @@
  * a routable cell, not a wall.
  */
 
-import { MECHANICS_DEFAULTS, cellId, formatCellId, isLand, isTraversable } from '@smoke/shared';
+import {
+  MECHANICS_DEFAULTS,
+  cellCenter,
+  cellId,
+  formatCellId,
+  isLand,
+  isTraversable,
+} from '@smoke/shared';
 import type { LatLng } from '@smoke/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -28,7 +35,7 @@ class FakeNws implements NwsClient {
   alerts: NwsAlert[] = [];
   failWith: NwsUnavailableError | null = null;
   forecastCalls: LatLng[] = [];
-  alertCalls: LatLng[] = [];
+  alertCalls = 0;
   inFlight = 0;
   maxInFlight = 0;
 
@@ -44,8 +51,8 @@ class FakeNws implements NwsClient {
     }
   }
 
-  async getActiveAlerts(point: LatLng): Promise<NwsAlert[]> {
-    this.alertCalls.push(point);
+  async getActiveAlerts(): Promise<NwsAlert[]> {
+    this.alertCalls++;
     if (this.failWith) throw this.failWith;
     return this.alerts;
   }
@@ -212,6 +219,34 @@ describe('fail-open (MECHANICS §2.1, REDTEAM F4)', () => {
   });
 });
 
+/** A square alert polygon around a point, in degrees. */
+function polygonAround(point: LatLng, halfDeg = 0.4): NwsAlert['geometry'] {
+  return {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [point.lng - halfDeg, point.lat - halfDeg],
+        [point.lng + halfDeg, point.lat - halfDeg],
+        [point.lng + halfDeg, point.lat + halfDeg],
+        [point.lng - halfDeg, point.lat + halfDeg],
+        [point.lng - halfDeg, point.lat - halfDeg],
+      ],
+    ],
+  };
+}
+
+function severeAlert(over: LatLng, patch: Partial<NwsAlert> = {}): NwsAlert {
+  return {
+    event: 'Severe Thunderstorm Warning',
+    severity: 'Severe',
+    status: 'Actual',
+    messageType: 'Alert',
+    ends: new Date(START.getTime() + 3_600_000).toISOString(),
+    geometry: polygonAround(over),
+    ...patch,
+  };
+}
+
 describe('impassability requires an active severe alert (REDTEAM F2)', () => {
   it('does not wall off an ordinary thunderstorm forecast', async () => {
     client.forecast = {
@@ -226,26 +261,88 @@ describe('impassability requires an active severe alert (REDTEAM F2)', () => {
     expect(entry.impassable).toBe(false);
   });
 
-  it('walls off a cell under an active severe warning', async () => {
-    client.alerts = [
-      {
-        event: 'Severe Thunderstorm Warning',
-        severity: 'Severe',
-        status: 'Actual',
-        messageType: 'Alert',
-        ends: new Date(START.getTime() + 3_600_000).toISOString(),
-      },
-    ];
-    const entry = (await makeCache().getCellWeather([CELLS.chicago])).get(CELLS.chicago)!;
-    expect(entry.impassable).toBe(true);
+  it('walls off a cell inside an active severe warning polygon', async () => {
+    client.alerts = [severeAlert(cellCenter(CELLS.chicago))];
+    const snapshot = await makeCache().getCellWeather([CELLS.chicago, CELLS.newark]);
+
+    expect(snapshot.get(CELLS.chicago)!.impassable).toBe(true);
+    // ...and only that cell: Newark is a thousand kilometres away.
+    expect(snapshot.get(CELLS.newark)!.impassable).toBe(false);
   });
 
   it('ignores advisories', async () => {
     client.alerts = [
-      { event: 'Heat Advisory', severity: 'Moderate', status: 'Actual', messageType: 'Alert' },
+      severeAlert(cellCenter(CELLS.chicago), { event: 'Heat Advisory', severity: 'Moderate' }),
     ];
     const entry = (await makeCache().getCellWeather([CELLS.chicago])).get(CELLS.chicago)!;
     expect(entry.impassable).toBe(false);
+  });
+
+  it('counts, but does not apply, alerts that arrive without geometry', async () => {
+    // Zone-based watches have no polygon. Walling off a whole state on one would
+    // strand far more than it protects, so they are reported and skipped.
+    client.alerts = [severeAlert(cellCenter(CELLS.chicago), { event: 'Tornado Watch', geometry: null })];
+    const cache = makeCache();
+    const entry = (await cache.getCellWeather([CELLS.chicago])).get(CELLS.chicago)!;
+
+    expect(entry.impassable).toBe(false);
+    expect(cache.lastStats.unmatchedAlerts).toBe(1);
+  });
+});
+
+describe('alerts are fetched in bulk, not per cell (REDTEAM F19)', () => {
+  it('makes one alert request for a whole corridor', async () => {
+    const cells = Array.from({ length: 12 }, (_, i) => formatCellId({ row: 37, col: 78 + i }));
+    const cache = makeCache();
+    await cache.getCellWeather(cells);
+
+    expect(client.forecastCalls.length).toBe(cells.length);
+    expect(client.alertCalls).toBe(1);
+  });
+
+  it('re-evaluates alerts for cells served from the weather cache', async () => {
+    const cache = makeCache();
+    await cache.getCellWeather([CELLS.chicago]);
+    expect(cache.lastStats.alerted).toBe(0);
+
+    // A warning appears five minutes later — well inside the 30-minute weather TTL.
+    client.alerts = [severeAlert(cellCenter(CELLS.chicago))];
+    advance(5);
+    const snapshot = await cache.getCellWeather([CELLS.chicago]);
+
+    expect(snapshot.get(CELLS.chicago)!.source).toBe('cache'); // forecast not refetched
+    expect(snapshot.get(CELLS.chicago)!.impassable).toBe(true); // but the wall is up
+    expect(cache.lastStats.alerted).toBe(1);
+  });
+
+  it('clears the wall again once the warning lapses', async () => {
+    const cache = makeCache();
+    client.alerts = [severeAlert(cellCenter(CELLS.chicago))];
+    await cache.getCellWeather([CELLS.chicago]);
+    expect(cache.lastStats.alerted).toBe(1);
+
+    client.alerts = [];
+    advance(TTL_MINUTES + 1);
+    const snapshot = await cache.getCellWeather([CELLS.chicago]);
+    expect(snapshot.get(CELLS.chicago)!.impassable).toBe(false);
+  });
+
+  it('assumes no alerts when the alerts endpoint is down (fail-open)', async () => {
+    const cache = makeCache();
+    client.failWith = new NwsUnavailableError('alerts down', 500);
+    const entry = (await cache.getCellWeather([CELLS.chicago])).get(CELLS.chicago)!;
+    expect(entry.impassable).toBe(false);
+  });
+
+  it('keeps the last known alerts through a brief outage', async () => {
+    const cache = makeCache();
+    client.alerts = [severeAlert(cellCenter(CELLS.chicago))];
+    await cache.getCellWeather([CELLS.chicago]);
+
+    client.failWith = new NwsUnavailableError('alerts down', 503);
+    advance(TTL_MINUTES + 1);
+    const snapshot = await cache.getCellWeather([CELLS.chicago]);
+    expect(snapshot.get(CELLS.chicago)!.impassable).toBe(true);
   });
 });
 
@@ -259,7 +356,6 @@ describe('the ocean is never fetched (MECHANICS §1.1)', () => {
     expect(entry.source).toBe('ocean');
     expect(entry.impassable).toBe(true);
     expect(client.forecastCalls).toHaveLength(0);
-    expect(client.alertCalls).toHaveLength(0);
     expect(store.all()).toHaveLength(0);
     expect(cache.lastStats.ocean).toBe(1);
   });

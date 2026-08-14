@@ -3,18 +3,28 @@
  *
  *   npm run generate:land-mask --workspace packages/shared
  *
- * Source: Natural Earth 1:10m land polygons, shipped as TopoJSON by the
- * `world-atlas` package (a dev dependency — the app never loads it at runtime).
- * Output: `src/geo/generated/landMask.ts`, committed to the repo. It is
- * generated data, not a tunable: it changes only when the grid changes.
+ * Two layers, rasterised identically from Natural Earth 1:10m data shipped by
+ * the `world-atlas` package (a dev dependency — the app never loads it at
+ * runtime):
  *
- * A cell counts as land if ANY of the sample points inside it falls on land, so
- * a cell holding a sliver of coastline is land. That bias is deliberate —
- * over-including coast is harmless, under-including it would strand a real user.
+ *   land   — all land polygons (`land-10m.json`)
+ *   us     — the United States admin-0 polygon (`countries-10m.json`, id 840)
+ *
+ * Every cell ends up as exactly one of:
+ *
+ *   '#'  US land        — routable
+ *   '~'  foreign land   — impassable in v1 (REDTEAM F16: no NWS data there, so
+ *                         fail-open would make Canada and Mexico free highways)
+ *   '.'  water          — routable only within one cell of US land
+ *
+ * Border cells are decided by **majority sample**: of the sample points that
+ * land on land at all, if at least half are inside the US the cell is US.
+ * Ties go to the US, because the cost of wrongly excluding a border town
+ * (an unroutable user) is worse than wrongly including a strip of Ontario.
  *
  * Method: scanline even-odd containment. For each sample latitude we compute
- * every ring crossing once, sort them, then answer all longitudes on that line by
- * counting crossings to the east. Even-odd handles lake holes for free.
+ * every ring crossing once, sort them, then answer all longitudes on that line
+ * by counting crossings to the east. Even-odd handles lake holes for free.
  */
 
 import { writeFileSync } from 'node:fs';
@@ -26,12 +36,19 @@ import type { Feature, MultiPolygon, Polygon, Position } from 'geojson';
 
 import { GRID, cellBounds, formatCellId } from '../src/geo/grid.js';
 
-// world-atlas ships plain JSON; import it the way Node reads data files.
 const landTopology = (await import('world-atlas/land-10m.json', {
   with: { type: 'json' },
 })) as unknown as { default: Topology };
 
-const SOURCE = 'Natural Earth 1:10m land, via world-atlas land-10m.json';
+const countriesTopology = (await import('world-atlas/countries-10m.json', {
+  with: { type: 'json' },
+})) as unknown as { default: Topology };
+
+const SOURCE =
+  'Natural Earth 1:10m land + admin-0 (US, id 840), via world-atlas land-10m.json and countries-10m.json';
+
+/** ISO 3166-1 numeric code for the United States, as Natural Earth ids it. */
+const US_ID = '840';
 
 /** Sample offsets within a cell, as fractions of its width/height. */
 const SAMPLE_OFFSETS = [0.1, 0.3, 0.5, 0.7, 0.9];
@@ -39,7 +56,7 @@ const SAMPLE_OFFSETS = [0.1, 0.3, 0.5, 0.7, 0.9];
 const OUT_PATH = fileURLToPath(new URL('../src/geo/generated/landMask.ts', import.meta.url));
 
 // ---------------------------------------------------------------------------
-// Collect the rings that could possibly touch the launch grid.
+// Rings
 // ---------------------------------------------------------------------------
 
 type Ring = Position[];
@@ -49,21 +66,19 @@ function collectRings(geometry: Polygon | MultiPolygon): Ring[] {
   return geometry.coordinates.flat();
 }
 
-// `objects.land` is a GeometryCollection in world-atlas, so `feature()` hands
-// back a FeatureCollection; older/smaller builds hand back a single Feature.
-const landGeoJson = feature(landTopology.default, landTopology.default.objects['land']!) as
-  | Feature<Polygon | MultiPolygon>
-  | { type: 'FeatureCollection'; features: Feature<Polygon | MultiPolygon>[] };
+type AnyFeature = Feature<Polygon | MultiPolygon> & { id?: string | number };
 
-const landGeometries: (Polygon | MultiPolygon)[] =
-  landGeoJson.type === 'FeatureCollection'
-    ? landGeoJson.features.map((f) => f.geometry)
-    : [landGeoJson.geometry];
+function featuresOf(topology: Topology, objectName: string): AnyFeature[] {
+  const geojson = feature(topology, topology.objects[objectName]!) as
+    | AnyFeature
+    | { type: 'FeatureCollection'; features: AnyFeature[] };
+  return geojson.type === 'FeatureCollection' ? geojson.features : [geojson];
+}
 
 const PAD = 1; // degrees of slack around the grid extent
 const { extent } = GRID;
 
-const rings = landGeometries.flatMap(collectRings).filter((ring) => {
+function nearTheGrid(ring: Ring): boolean {
   let minLng = Infinity;
   let maxLng = -Infinity;
   let minLat = Infinity;
@@ -80,19 +95,29 @@ const rings = landGeometries.flatMap(collectRings).filter((ring) => {
     maxLat >= extent.min_lat - PAD &&
     minLat <= extent.max_lat + PAD
   );
-});
+}
+
+const landRings = featuresOf(landTopology.default, 'land')
+  .flatMap((f) => collectRings(f.geometry))
+  .filter(nearTheGrid);
+
+const usFeatures = featuresOf(countriesTopology.default, 'countries').filter(
+  (f) => String(f.id) === US_ID,
+);
+if (usFeatures.length === 0) throw new Error('could not find the US in countries-10m.json');
+
+const usRings = usFeatures.flatMap((f) => collectRings(f.geometry)).filter(nearTheGrid);
 
 console.log(
-  `${rings.length} rings intersect the launch grid ` +
-    `(${rings.reduce((n, r) => n + r.length, 0).toLocaleString()} vertices)`,
+  `land: ${landRings.length} rings (${landRings.reduce((n, r) => n + r.length, 0).toLocaleString()} vertices)\n` +
+    `us:   ${usRings.length} rings (${usRings.reduce((n, r) => n + r.length, 0).toLocaleString()} vertices)`,
 );
 
 // ---------------------------------------------------------------------------
 // Scanline containment
 // ---------------------------------------------------------------------------
 
-/** Longitudes where the rings cross a given latitude, sorted ascending. */
-function crossingsAtLatitude(lat: number): number[] {
+function crossingsAtLatitude(rings: Ring[], lat: number): number[] {
   const xs: number[] = [];
   for (const ring of rings) {
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -106,7 +131,7 @@ function crossingsAtLatitude(lat: number): number[] {
   return xs.sort((a, b) => a - b);
 }
 
-/** Even-odd test: odd number of crossings strictly east of `lng` means inside. */
+/** Even-odd test: an odd number of crossings strictly east of `lng` means inside. */
 function isInside(sortedCrossings: number[], lng: number): boolean {
   let lo = 0;
   let hi = sortedCrossings.length;
@@ -119,36 +144,49 @@ function isInside(sortedCrossings: number[], lng: number): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Rasterise the grid
+// Rasterise
 // ---------------------------------------------------------------------------
 
 const maskRows: string[] = [];
-let landCells = 0;
+let usCells = 0;
+let foreignCells = 0;
+let waterCells = 0;
 
 for (let row = 0; row < GRID.rows; row++) {
-  const bounds = cellBounds(formatCellId({ row, col: 0 }));
-  const height = bounds.north - bounds.south;
+  const rowBounds = cellBounds(formatCellId({ row, col: 0 }));
+  const height = rowBounds.north - rowBounds.south;
 
-  // One scanline per sample latitude in this row, reused across all columns.
-  const scanlines = SAMPLE_OFFSETS.map((f) => crossingsAtLatitude(bounds.south + f * height));
+  const latitudes = SAMPLE_OFFSETS.map((f) => rowBounds.south + f * height);
+  const landScanlines = latitudes.map((lat) => crossingsAtLatitude(landRings, lat));
+  const usScanlines = latitudes.map((lat) => crossingsAtLatitude(usRings, lat));
 
   let line = '';
   for (let col = 0; col < GRID.cols; col++) {
     const cell = cellBounds(formatCellId({ row, col }));
     const width = cell.east - cell.west;
-    let isLand = false;
 
-    outer: for (const scanline of scanlines) {
+    let landHits = 0;
+    let usHits = 0;
+    for (let s = 0; s < latitudes.length; s++) {
       for (const f of SAMPLE_OFFSETS) {
-        if (isInside(scanline, cell.west + f * width)) {
-          isLand = true;
-          break outer;
+        const lng = cell.west + f * width;
+        if (isInside(landScanlines[s]!, lng)) {
+          landHits++;
+          if (isInside(usScanlines[s]!, lng)) usHits++;
         }
       }
     }
 
-    line += isLand ? '#' : '.';
-    if (isLand) landCells++;
+    if (landHits === 0) {
+      line += '.';
+      waterCells++;
+    } else if (usHits * 2 >= landHits) {
+      line += '#';
+      usCells++;
+    } else {
+      line += '~';
+      foreignCells++;
+    }
   }
   maskRows.push(line);
   if ((row + 1) % 10 === 0) console.log(`  row ${row + 1}/${GRID.rows}`);
@@ -157,6 +195,13 @@ for (let row = 0; row < GRID.rows; row++) {
 // ---------------------------------------------------------------------------
 // Emit
 // ---------------------------------------------------------------------------
+
+function gridSignature(): string {
+  return (
+    `${GRID.rows}x${GRID.cols}@${GRID.cellKm}km/` +
+    `${GRID.bbox.min_lat},${GRID.bbox.min_lng},${GRID.bbox.max_lat},${GRID.bbox.max_lng}`
+  );
+}
 
 // Rows are emitted north-first so the committed file reads like a map of the US.
 const northFirst = [...maskRows].reverse();
@@ -168,7 +213,14 @@ const file = `/**
  * Regenerate with: npm run generate:land-mask --workspace packages/shared
  *
  * Source: ${SOURCE}
- * A cell is land ('#') if any of ${SAMPLE_OFFSETS.length ** 2} sample points inside it falls on land.
+ * Each cell is classified from ${SAMPLE_OFFSETS.length ** 2} sample points:
+ *
+ *   '#'  US land       — routable
+ *   '~'  foreign land  — impassable in v1 (REDTEAM F16)
+ *   '.'  water         — routable only within one cell of US land
+ *
+ * Border cells go to whichever country holds the majority of their land
+ * samples; ties go to the US.
  *
  * LAND_MASK_ROWS[0] is the NORTHERNMOST row (so the array reads like a map);
  * index into it with \`GRID.rows - 1 - row\`. Column 0 is the westernmost.
@@ -176,31 +228,30 @@ const file = `/**
 
 export const LAND_MASK_META = {
   source: ${JSON.stringify(SOURCE)},
+  /** Bumped when the classification scheme changes, not when the data does. */
+  maskVersion: 2,
   rows: ${GRID.rows},
   cols: ${GRID.cols},
   samplesPerCell: ${SAMPLE_OFFSETS.length ** 2},
-  landCells: ${landCells},
+  usLandCells: ${usCells},
+  foreignLandCells: ${foreignCells},
+  waterCells: ${waterCells},
   /** Signature of the grid this mask was rasterised against. */
   gridSignature: ${JSON.stringify(gridSignature())},
 } as const;
 
-/** '#' = land, '.' = water. North-first; see the note above. */
+/** '#' US land, '~' foreign land, '.' water. North-first; see the note above. */
 export const LAND_MASK_ROWS: readonly string[] = [
 ${northFirst.map((r) => `  '${r}',`).join('\n')}
 ];
 `;
 
-function gridSignature(): string {
-  return (
-    `${GRID.rows}x${GRID.cols}@${GRID.cellKm}km/` +
-    `${GRID.bbox.min_lat},${GRID.bbox.min_lng},${GRID.bbox.max_lat},${GRID.bbox.max_lng}`
-  );
-}
-
 writeFileSync(OUT_PATH, file, 'utf8');
 
 console.log(
   `\nWrote ${OUT_PATH}\n` +
-    `  ${landCells} land cells of ${GRID.cellCount} ` +
-    `(${((100 * landCells) / GRID.cellCount).toFixed(1)}%)`,
+    `  US land:      ${usCells}\n` +
+    `  foreign land: ${foreignCells}\n` +
+    `  water:        ${waterCells}\n` +
+    `  total:        ${GRID.cellCount}`,
 );

@@ -1,18 +1,24 @@
 /**
- * The ocean rule (MECHANICS §1.1, ARCHITECTURE §5).
+ * The land mask: sea and border rules (MECHANICS §1.1, ARCHITECTURE §5).
  *
- * Fail-open weather (MECHANICS §2.1) treats anything unfetchable as clear. Over
- * water that would make the Atlantic the cheapest terrain on the map and A*
- * would happily sail a Newark→Miami message a hundred miles offshore. So water
- * is excluded structurally rather than by weather:
+ * Fail-open weather (MECHANICS §2.1) treats anything unfetchable as clear. Our
+ * weather source is US-only, so *everywhere* NWS cannot see would otherwise be
+ * the cheapest terrain on the map: the Atlantic (REDTEAM F13) and, just as
+ * badly, Canada and Mexico (REDTEAM F16). A* would sail Newark→Miami offshore
+ * and thread Detroit→Buffalo through Ontario.
  *
- *   traversable = is_land OR 8-adjacent to a land cell
+ * Both holes are closed structurally rather than by weather:
+ *
+ *   traversable = (is_us OR 8-adjacent to a US-land cell) AND NOT foreign_land
  *
  * The one-cell skirt keeps coastal cities routable (Newark, Miami and Seattle
- * all sit on the coast, and their great-circle corridors clip the shore) without
- * opening the open ocean. Open-ocean cells are impassable *always* — this is a
- * structural fact about the world, not a weather condition, so nothing in the
- * fail-open path can override it.
+ * all sit on the coast). The foreign-land exclusion keeps smoke inside the
+ * launch region. Neither is a weather condition, so nothing in the fail-open
+ * path can override them.
+ *
+ * The border rule is a launch-region rule, not a permanent one: it exists
+ * because our weather source stops at the border, and it reopens with
+ * international expansion (SPEC §3 v2).
  */
 
 import { LAND_MASK_META, LAND_MASK_ROWS } from './generated/landMask.js';
@@ -37,9 +43,16 @@ if (LAND_MASK_ROWS.length !== GRID.rows) {
   );
 }
 
-/** `land[row * cols + col]` — 1 for land. Rows are south-first, like the grid. */
-const land = new Uint8Array(GRID.cellCount);
-/** Land, or touching land: the cells smoke may occupy. */
+/** How a cell is classified by the mask. */
+export type CellTerrain = 'us_land' | 'foreign_land' | 'water';
+
+const US = 1;
+const FOREIGN = 2;
+const WATER = 0;
+
+/** `terrain[row * cols + col]`. Rows are south-first, like the grid. */
+const terrain = new Uint8Array(GRID.cellCount);
+/** Land (either country), or touching US land: the cells smoke may occupy. */
 const traversable = new Uint8Array(GRID.cellCount);
 
 for (let row = 0; row < GRID.rows; row++) {
@@ -49,20 +62,23 @@ for (let row = 0; row < GRID.rows; row++) {
     throw new Error(`land mask row ${row} has ${line.length} columns, expected ${GRID.cols}`);
   }
   for (let col = 0; col < GRID.cols; col++) {
-    if (line[col] === '#') land[row * GRID.cols + col] = 1;
+    const char = line[col];
+    terrain[row * GRID.cols + col] = char === '#' ? US : char === '~' ? FOREIGN : WATER;
   }
 }
 
 for (let row = 0; row < GRID.rows; row++) {
   for (let col = 0; col < GRID.cols; col++) {
     const index = row * GRID.cols + col;
-    if (land[index]) {
+    if (terrain[index] === FOREIGN) continue; // never traversable in v1
+    if (terrain[index] === US) {
       traversable[index] = 1;
       continue;
     }
+    // Water: routable only within one cell of US land.
     for (const n of neighbors(formatCellId({ row, col }))) {
       const p = parseCellId(n);
-      if (land[p.row * GRID.cols + p.col]) {
+      if (terrain[p.row * GRID.cols + p.col] === US) {
         traversable[index] = 1;
         break;
       }
@@ -70,22 +86,34 @@ for (let row = 0; row < GRID.rows; row++) {
   }
 }
 
-const LAND_CELL_COUNT = land.reduce((n, v) => n + v, 0);
-const TRAVERSABLE_CELL_COUNT = traversable.reduce((n, v) => n + v, 0);
-
 function indexOf(id: CellId): number {
   const { row, col } = parseCellId(id);
   return row * GRID.cols + col;
 }
 
-/** True if the cell contains any land (Natural Earth 1:10m). */
+export function terrainOf(id: CellId): CellTerrain {
+  const value = terrain[indexOf(id)];
+  return value === US ? 'us_land' : value === FOREIGN ? 'foreign_land' : 'water';
+}
+
+/** True if the cell is US land. */
+export function isUsLand(id: CellId): boolean {
+  return terrain[indexOf(id)] === US;
+}
+
+/** True if the cell is land on the far side of a border (Canada, Mexico). */
+export function isForeignLand(id: CellId): boolean {
+  return terrain[indexOf(id)] === FOREIGN;
+}
+
+/** True if the cell contains any land, whoever it belongs to. */
 export function isLand(id: CellId): boolean {
-  return land[indexOf(id)] === 1;
+  return terrain[indexOf(id)] !== WATER;
 }
 
 /**
- * True if smoke may occupy this cell: land, or water within one cell of land.
- * Everything else is open ocean and permanently impassable.
+ * True if smoke may occupy this cell: US land, or water within one cell of US
+ * land. Open ocean and foreign land are permanently impassable.
  */
 export function isTraversable(id: CellId): boolean {
   return traversable[indexOf(id)] === 1;
@@ -94,13 +122,20 @@ export function isTraversable(id: CellId): boolean {
 /** Coastal water: traversable, but not itself land. */
 export function isCoastalWater(id: CellId): boolean {
   const index = indexOf(id);
-  return traversable[index] === 1 && land[index] === 0;
+  return traversable[index] === 1 && terrain[index] === WATER;
 }
 
+const count = (predicate: (value: number) => boolean): number => {
+  let n = 0;
+  for (const value of terrain) if (predicate(value)) n++;
+  return n;
+};
+
 export const LAND_STATS = {
-  landCells: LAND_CELL_COUNT,
-  traversableCells: TRAVERSABLE_CELL_COUNT,
-  openOceanCells: GRID.cellCount - TRAVERSABLE_CELL_COUNT,
+  usLandCells: count((v) => v === US),
+  foreignLandCells: count((v) => v === FOREIGN),
+  waterCells: count((v) => v === WATER),
+  traversableCells: traversable.reduce((n, v) => n + v, 0),
   totalCells: GRID.cellCount,
 } as const;
 

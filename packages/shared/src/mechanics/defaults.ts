@@ -161,6 +161,20 @@ export const MECHANICS_SPEC = {
     note: 'Never instant; anticipation is the product.',
   },
 
+  // --- ARCHITECTURE §6.4 · preview/send contract -------------------------
+  'preview.token_ttl_minutes': {
+    value: 10,
+    tune: false,
+    source: 'ARCHITECTURE §6.4 / REDTEAM F18',
+    note: 'A quoted route older than this is recomputed silently.',
+  },
+  'preview.eta_shift_warn_fraction': {
+    value: 0.2,
+    tune: true,
+    source: 'ARCHITECTURE §6.4',
+    note: 'Warn the sender when the recomputed ETA differs from the preview by more than this.',
+  },
+
   // --- MECHANICS §6.1 · stranding & dissipation --------------------------
   'stranded.grace_hours': { value: 24, tune: false, source: 'MECHANICS §6.1' },
   'stranded.dissipation_chance_per_day': {

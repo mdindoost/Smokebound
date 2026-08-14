@@ -22,6 +22,12 @@ export interface NwsForecast {
   windDirection: string;
 }
 
+/** GeoJSON ring geometry as NWS attaches it to storm-based alerts. */
+export interface AlertGeometry {
+  type: 'Polygon' | 'MultiPolygon';
+  coordinates: number[][][] | number[][][][];
+}
+
 export interface NwsAlert {
   event: string;
   /** NWS CAP severity: Extreme | Severe | Moderate | Minor | Unknown */
@@ -32,13 +38,25 @@ export interface NwsAlert {
   messageType: string;
   ends?: string | null;
   expires?: string | null;
+  /** Human-readable area, e.g. "Erie, NY". Present even when geometry is not. */
+  areaDesc?: string;
+  /**
+   * Polygon for storm-based alerts. Zone-based alerts (many watches) arrive with
+   * no geometry at all — see `WeatherCache` for how those are handled.
+   */
+  geometry?: AlertGeometry | null;
 }
 
 export interface NwsClient {
   /** Current-period forecast for a point, or null where NWS has no coverage. */
   getForecast(point: LatLng): Promise<NwsForecast | null>;
-  /** Active alerts covering a point. Empty array when there are none. */
-  getActiveAlerts(point: LatLng): Promise<NwsAlert[]>;
+  /**
+   * Every active alert in the launch region, in one request (REDTEAM F19).
+   * Fetching per cell multiplied request volume by corridor length for no extra
+   * information — a national alert list is a few hundred KB and covers a whole
+   * replan sweep.
+   */
+  getActiveAlerts(): Promise<NwsAlert[]>;
 }
 
 export class NwsUnavailableError extends Error {
@@ -119,13 +137,15 @@ export class HttpNwsClient implements NwsClient {
     };
   }
 
-  async getActiveAlerts(point: LatLng): Promise<NwsAlert[]> {
-    const url = `${this.baseUrl}/alerts/active?point=${point.lat.toFixed(4)},${point.lng.toFixed(4)}`;
+  async getActiveAlerts(): Promise<NwsAlert[]> {
+    const url = `${this.baseUrl}/alerts/active?status=actual`;
     const body = (await this.getJson(url)) as {
-      features?: { properties?: NwsAlert }[];
+      features?: { properties?: NwsAlert; geometry?: AlertGeometry | null }[];
     } | null;
     if (!body?.features) return [];
-    return body.features.flatMap((f) => (f.properties ? [f.properties] : []));
+    return body.features.flatMap((f) =>
+      f.properties ? [{ ...f.properties, geometry: f.geometry ?? null }] : [],
+    );
   }
 
   private async resolveForecastUrl(point: LatLng): Promise<string | null> {

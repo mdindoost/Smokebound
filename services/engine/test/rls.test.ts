@@ -443,6 +443,83 @@ describe('reports and reference data', () => {
     ).rejects.toThrow(/permission denied/i);
   });
 
+  it('lets a client queue an engine request but never answer one', async () => {
+    // The table transport's security model: RLS stamps the requester, so the
+    // engine can trust that column as much as it would trust a verified JWT.
+    await t.as(ALICE);
+    const { rows } = await t.db.query<{ id: string; requester: string }>(
+      `insert into public.engine_requests (requester, kind, payload)
+       values ($1, 'preview', '{"body":"hi"}'::jsonb) returning id, requester`,
+      [ALICE],
+    );
+    expect(rows[0]!.requester).toBe(ALICE);
+
+    // Not on someone else's behalf...
+    await expect(
+      t.db.query(
+        `insert into public.engine_requests (requester, kind, payload)
+         values ($1, 'preview', '{}'::jsonb)`,
+        [BOB],
+      ),
+    ).rejects.toThrow(/row-level security/i);
+
+    // ...not pre-answered...
+    await expect(
+      t.db.query(
+        `insert into public.engine_requests (requester, kind, status, payload)
+         values ($1, 'send', 'done', '{}'::jsonb)`,
+        [ALICE],
+      ),
+    ).rejects.toThrow(/row-level security/i);
+
+    // ...and never a response row.
+    await expect(
+      t.db.query(
+        `insert into public.engine_responses (request_id, requester, ok) values ($1, $2, true)`,
+        [rows[0]!.id, ALICE],
+      ),
+    ).rejects.toThrow(/permission denied/i);
+  });
+
+  it('shows each requester only their own traffic', async () => {
+    await t.asEngine();
+    const { rows } = await t.db.query<{ id: string }>(
+      `insert into public.engine_requests (requester, kind, payload)
+       values ($1, 'send', '{}'::jsonb) returning id`,
+      [BOB],
+    );
+    await t.db.query(
+      `insert into public.engine_responses (request_id, requester, ok, payload)
+       values ($1, $2, true, '{"messageId":"x"}'::jsonb)`,
+      [rows[0]!.id, BOB],
+    );
+
+    const alicesView = await selectAs(ALICE, 'select id from public.engine_requests');
+    expect(alicesView.every((r) => (r as { id: string }).id !== rows[0]!.id)).toBe(true);
+
+    const alicesResponses = await selectAs(
+      ALICE,
+      'select request_id from public.engine_responses where request_id = $1',
+      [rows[0]!.id],
+    );
+    expect(alicesResponses).toHaveLength(0);
+
+    const bobsResponses = await selectAs(
+      BOB,
+      'select request_id from public.engine_responses where request_id = $1',
+      [rows[0]!.id],
+    );
+    expect(bobsResponses).toHaveLength(1);
+  });
+
+  it('keeps the Keeper’s lines out of client reach', async () => {
+    await t.asEngine();
+    await t.db.query(`insert into public.keeper_lines (id, line) values (9001, 'a test line')`);
+    await expect(selectAs(ALICE, 'select line from public.keeper_lines')).rejects.toThrow(
+      /permission denied/i,
+    );
+  });
+
   it('gives an anonymous visitor nothing', async () => {
     for (const table of ['profiles', 'messages', 'weather_cells', 'mechanics_config']) {
       await expect(selectAs(null, `select * from public.${table}`, [], 'anon')).rejects.toThrow(

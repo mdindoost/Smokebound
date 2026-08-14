@@ -11,10 +11,11 @@ The design documents are the source of truth, in this order of authority:
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Stack, data model, services, milestones |
 | [REDTEAM.md](REDTEAM.md) | Decisions already litigated — do not re-open |
 
-**Current milestone: M2 — Engine core (complete).** M1 gave us the monorepo, cell math,
-shared types, Supabase schema + RLS and `mechanics_config` seeding. M2 adds the weather
-cache and the A* router. No send pipeline, no crons, no UI yet — those are M3–M5
-(ARCHITECTURE §10).
+**Current milestone: M3 — Lifecycle (complete).** M1 built the monorepo, cell math,
+schema and config seeding; M2 the weather cache and A* router; M3 the whole message
+lifecycle — preview/send/resend over two transports, the delivery/replan/dissipation
+crons, garble, The Keeper, and an event log for every transition. No UI yet: that is
+M4/M5 (ARCHITECTURE §10).
 
 ---
 
@@ -41,8 +42,8 @@ npm install
 
 ```bash
 npm test                              # shared + engine
-npm test --workspace packages/shared  # cell math, land mask, mechanics, model   (99 tests)
-npm test --workspace services/engine  # migrations, RLS, seeding, weather, router (183 tests)
+npm test --workspace packages/shared  # cell math, land mask, mechanics, model    (101 tests)
+npm test --workspace services/engine  # schema, RLS, weather, router, lifecycle   (279 tests)
 npm run typecheck                     # all workspaces
 ```
 
@@ -62,6 +63,7 @@ statements the suite proves rather than assumes. No Docker, no database server n
    set -a && source .env && set +a
    npm run db:migrate        # applies supabase/migrations in order, idempotently
    npm run db:seed           # fills mechanics_config from MECHANICS.md
+   npm run seed -w services/engine -- --keeper   # adds The Keeper + its flavour lines
    ```
 
 If you use the Supabase CLI instead, `supabase link` + `supabase db push` applies the
@@ -87,6 +89,8 @@ Tables exactly as ARCHITECTURE §3 specifies: `profiles`, `flock`, `blocks`, `me
 - **blocks** — visible to the blocker only.
 - **weather_cells / mechanics_config** — readable by any signed-in user (the map and the
   compose screen need them), writable only by the engine.
+- **engine_requests / engine_responses** — a client may queue a request under its own id
+  and watch its own answers; it can never write a response or read someone else's.
 - Clients may insert a message, a flock request, a block or a report. Every state
   transition after that belongs to the engine service, which writes with the
   service-role key (ARCHITECTURE §4: single writer, no client races).
@@ -189,6 +193,46 @@ passable (REDTEAM F2). Open ocean is never fetched at all. All NWS access sits b
 flown at full tailwind, which the test suite checks against a Dijkstra reference on random
 weather fields.
 
+### Running the engine
+
+```bash
+DATABASE_URL=...  PREVIEW_TOKEN_SECRET=...  npm start -w services/engine
+```
+
+| Variable | Meaning |
+|---|---|
+| `DATABASE_URL` | Postgres connection string (required) |
+| `PREVIEW_TOKEN_SECRET` | HMAC secret for preview tokens (required) |
+| `ENGINE_TRANSPORT` | `table` (default), `http`, `both`, `none` |
+| `SUPABASE_JWT_SECRET` | Required when the HTTP transport is on |
+| `NWS_USER_AGENT` | Contact string NWS asks every client to send |
+
+**Transports** (ARCHITECTURE §6.4). The same `preview` / `send` / `resend` handlers are
+served two ways. Over **HTTP** the caller authenticates with a Supabase access token. Over
+the **table transport** the client inserts a row into `engine_requests` and reads the
+answer from `engine_responses` — RLS stamps `requester = auth.uid()`, so the engine can
+trust that column exactly as much as a verified JWT. The table transport is the launch
+configuration, not a fallback: the beta engine runs on a home server behind NAT and must
+work fully outbound. A parity test sends the same message all three ways and compares.
+
+**Crons** (ARCHITECTURE §6.3), all reading their cadence from `mechanics_config`:
+
+- **delivery-check** (1 min) — `TRANSMITTING → IN_FLIGHT`, advances legs against the
+  segment ETAs, rolls garble in gale cells, and materialises `body_delivered` on arrival.
+- **replan** (15 min) — strands a message when the next cell closes, and gets stranded
+  ones moving again when it opens. A send with no route at all strands *at its origin*
+  and is retried here (REDTEAM F17): a walled-off sky is never a send failure.
+- **dissipation** (1 h) — after 24 h stranded, rolls the 5%/day loss. The per-day chance is
+  converted to the cron's cadence, so changing the schedule cannot change the game.
+- **The Keeper** — answers a first message about half an hour after it lands, rotating
+  through `keeper_lines`. Its fire is always one cell from yours, per user (REDTEAM F5).
+
+Garble (MECHANICS §6.2) is derived, not stored: `body` keeps the original, each gale is
+recorded in `garble_events`, and the delivered text is replayed from that log with a seed
+built from the message id — so a mangled message can always be explained afterwards. It
+operates on whole grapheme clusters, tested against Latin, Arabic, CJK, Devanagari and
+emoji fixtures.
+
 ## Running the app
 
 ```bash
@@ -200,5 +244,6 @@ to look at. Screens are M4/M5.
 
 ## What is next
 
-- **M3 — Lifecycle:** send/preview endpoints, crons, full state machine, garble, dissipation.
-- **M4 — Client shell**, **M5 — The Sky**, **M6 — Ship prep**. See ARCHITECTURE §10.
+- **M4 — Client shell:** auth, profiles, flock, compose with preview, the Ledger (no map).
+- **M5 — The Sky:** map, radar overlay, flight animation, loss screen. The demo milestone.
+- **M6 — Ship prep:** push wiring, settings, icons, EAS build, TestFlight. See ARCHITECTURE §10.

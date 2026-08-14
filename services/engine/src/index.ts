@@ -34,3 +34,53 @@ export type {
   RouteWaypoint,
 } from './routing/astar.js';
 export { cellMultipliers, heuristicHours, hopDistanceKm, hopHours, windMultiplier } from './routing/cost.js';
+
+// --- M3: lifecycle ----------------------------------------------------------
+export { createEngineContext } from './engine/context.js';
+export type { EngineContext, CreateEngineContextOptions } from './engine/context.js';
+export { systemClock, addHours, addMinutes, hoursBetween } from './engine/clock.js';
+export type { Clock } from './engine/clock.js';
+export { seededRng, systemRng, rollChance, uniform, hashSeed } from './engine/rng.js';
+export type { Rng } from './engine/rng.js';
+export { NoopPushDispatcher, RecordingPushDispatcher } from './engine/push.js';
+export type { PushDispatcher, PushMessage } from './engine/push.js';
+export {
+  assertEngineInvariants,
+  assertHeuristicAdmissible,
+  minimumAchievableTimeMultiplier,
+  ConfigInvariantError,
+} from './engine/guards.js';
+
+export { previewMessage, sendMessage, resendMessage } from './messages/send.js';
+export type {
+  PreviewRequest,
+  PreviewResult,
+  SendRequest,
+  SendResult,
+  EtaWarning,
+  ProximityNote,
+} from './messages/send.js';
+export { EngineError } from './messages/errors.js';
+export type { EngineErrorCode } from './messages/errors.js';
+export { garbleText, graphemeCount, graphemes, transmissionSeconds } from './messages/text.js';
+export { replayGarbles } from './messages/garbleLog.js';
+export { planJourney, replanFrom } from './messages/planning.js';
+export {
+  KEEPER_ID,
+  KEEPER_HANDLE,
+  KEEPER_LINES,
+  ensureKeeper,
+  ensureKeeperFlock,
+  keeperCellFor,
+  nextKeeperLine,
+} from './messages/keeper.js';
+export { hashBody, signPreviewToken, verifyPreviewToken } from './messages/token.js';
+
+export { runDeliveryCheck } from './crons/deliveryCheck.js';
+export { runReplan } from './crons/replan.js';
+export { runDissipation, perRunDissipationChance } from './crons/dissipation.js';
+export { runKeeperReplies } from './crons/keeperReply.js';
+export { startCrons, runAllCronsOnce } from './crons/scheduler.js';
+
+export * from './transport/index.js';
+export * as repo from './db/repo.js';

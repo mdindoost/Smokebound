@@ -20,13 +20,15 @@
 import {
   cellCenter,
   cellsAlongGreatCircle,
+  cellsInBoundingBox,
   expandWithPadding,
   isTraversable,
 } from '@smoke/shared';
 import type { CellId, LatLng, MechanicsConfig, WeatherCondition } from '@smoke/shared';
 
 import { NwsUnavailableError, isSevereAlert } from './nws.js';
-import type { NwsClient } from './nws.js';
+import type { NwsAlert, NwsClient } from './nws.js';
+import { pointInAlert } from './geometry.js';
 import { mapNwsCondition, parseWindDirection, parseWindSpeedMph } from './conditions.js';
 import type { StoredWeather, WeatherStore } from './store.js';
 import { snapshotFrom } from './types.js';
@@ -50,12 +52,17 @@ export interface WeatherCacheOptions {
 
 export interface WeatherPassStats {
   requested: number;
+  /** Structurally impassable: open ocean or foreign land (MECHANICS §1.1). */
   ocean: number;
   cached: number;
   fetched: number;
   stale: number;
   failOpen: number;
   degraded: boolean;
+  /** Cells walled off by an active severe alert this pass. */
+  alerted: number;
+  /** Active severe alerts that arrived without geometry, so could not be matched. */
+  unmatchedAlerts: number;
 }
 
 const DEFAULT_CONCURRENCY = 4;
@@ -75,6 +82,9 @@ export class WeatherCache {
   /** Set when NWS throttles us; until then the degraded TTL applies. */
   private degradedUntil: Date | null = null;
 
+  /** Active alerts for the whole region, refreshed once per TTL (REDTEAM F19). */
+  private alerts: { fetchedAt: Date; list: NwsAlert[] } | null = null;
+
   lastStats: WeatherPassStats = {
     requested: 0,
     ocean: 0,
@@ -83,6 +93,8 @@ export class WeatherCache {
     stale: 0,
     failOpen: 0,
     degraded: false,
+    alerted: 0,
+    unmatchedAlerts: 0,
   };
 
   constructor(options: WeatherCacheOptions) {
@@ -111,12 +123,19 @@ export class WeatherCache {
   }
 
   /**
-   * Weather for the cells a route might use: the great-circle corridor between
-   * the endpoints, padded by `grid.prefetch_padding_cells` (MECHANICS §1).
+   * Weather for the cells a route might use: the **bounding box** of the
+   * great-circle corridor, padded by `grid.prefetch_padding_cells` (MECHANICS §1
+   * — "cells inside the bounding boxes of in-flight routes (+1 cell padding)").
+   *
+   * A box rather than a line, deliberately: under fail-open an unfetched cell is
+   * priced as clear, so a narrow corridor hands the router an attractive unknown
+   * frontier to detour into — and a message that should be sheltering would sail
+   * around the storm through terrain nobody has looked at.
    */
   async getCorridorWeather(origin: CellId, dest: CellId): Promise<WeatherSnapshot> {
     const corridor = cellsAlongGreatCircle(origin, dest);
-    const padded = expandWithPadding(corridor, this.config.get('grid.prefetch_padding_cells'));
+    const box = cellsInBoundingBox(corridor);
+    const padded = expandWithPadding(box, this.config.get('grid.prefetch_padding_cells'));
     return this.getCellWeather(padded);
   }
 
@@ -131,6 +150,8 @@ export class WeatherCache {
       stale: 0,
       failOpen: 0,
       degraded: this.degradedUntil !== null && this.degradedUntil.getTime() > now.getTime(),
+      alerted: 0,
+      unmatchedAlerts: 0,
     };
 
     const results: CellWeather[] = [];
@@ -144,24 +165,39 @@ export class WeatherCache {
       }
     }
 
+    // One alert fetch covers the whole pass, so alerts are re-evaluated for
+    // *every* cell — including ones served from cache. A severe warning that
+    // appeared five minutes ago must strand a message now, not when the 30-minute
+    // weather TTL happens to expire.
+    const severe = await this.refreshAlerts(now, stats);
+    const isAlerted = (cell: CellId): boolean =>
+      severe.length > 0 &&
+      this.config.get('weather.severe_alert_impassable') &&
+      severe.some((alert) => pointInAlert(alert.geometry, cellCenter(cell)));
+
     const stored = await this.store.read(routable);
     const ttl = this.ttlMs(now);
     const needFetch: CellId[] = [];
+    const writes: StoredWeather[] = [];
 
     for (const cell of routable) {
       const row = stored.get(cell);
       if (row && now.getTime() - row.fetchedAt.getTime() < ttl) {
-        results.push({ ...row, cell, source: 'cache' });
+        const impassable = isAlerted(cell);
+        if (impassable) stats.alerted++;
+        results.push({ ...row, cell, impassable, source: 'cache' });
         stats.cached++;
+        if (impassable !== row.impassable) writes.push({ ...row, cell, impassable });
       } else {
         needFetch.push(cell);
       }
     }
 
-    const writes: StoredWeather[] = [];
-
     await this.inBatches(needFetch, async (cell) => {
-      const entry = await this.fetchCell(cell, stored.get(cell), now, stats);
+      const fetched = await this.fetchCell(cell, stored.get(cell), now, stats);
+      const impassable = isAlerted(cell);
+      if (impassable) stats.alerted++;
+      const entry = { ...fetched, impassable };
       results.push(entry);
       // Fail-open entries are persisted too: during an NWS outage that stops us
       // re-asking for every cell on every pass, and `weather_unknown` records
@@ -185,10 +221,46 @@ export class WeatherCache {
     this.lastStats = stats;
     this.log(
       `weather: ${stats.cached} cached, ${stats.fetched} fetched, ${stats.stale} stale, ` +
-        `${stats.failOpen} fail-open, ${stats.ocean} ocean${stats.degraded ? ' (degraded)' : ''}`,
+        `${stats.failOpen} fail-open, ${stats.ocean} unroutable, ${stats.alerted} alerted` +
+        `${stats.degraded ? ' (degraded)' : ''}`,
     );
 
     return snapshotFrom(results);
+  }
+
+  /**
+   * Refresh the region-wide alert list if it is older than the TTL, and return
+   * the severe ones (MECHANICS §2.1, REDTEAM F2/F19).
+   *
+   * Fail-open applies here too: if the alerts endpoint is down we keep the last
+   * list we saw while it is inside the stale window, and otherwise assume no
+   * alerts. Never strand on missing data — only on confirmed severe weather.
+   */
+  private async refreshAlerts(now: Date, stats: WeatherPassStats): Promise<NwsAlert[]> {
+    // Alerts are refreshed on *every* pass, never cached for a TTL: they are one
+    // cheap request, and they are the only thing that can wall a cell off. A
+    // warning that appeared five minutes ago has to strand a message now, not
+    // when the 30-minute forecast TTL happens to lapse.
+    try {
+      this.alerts = { fetchedAt: now, list: await this.client.getActiveAlerts() };
+    } catch (err) {
+      if (!(err instanceof NwsUnavailableError)) throw err;
+      if (err.isThrottled) this.enterDegradedMode(now);
+      const staleOk =
+        this.alerts !== null &&
+        now.getTime() - this.alerts.fetchedAt.getTime() < this.staleLimitMs(now);
+      if (!staleOk) {
+        this.log('weather: alerts unavailable and stale — assuming none (fail-open)');
+        this.alerts = null;
+      }
+    }
+
+    const severe = (this.alerts?.list ?? []).filter((alert) => isSevereAlert(alert, now));
+    // Zone-based alerts (many watches) carry no polygon, so they cannot be matched
+    // to cells. Counted here rather than guessed at: turning a whole state
+    // impassable on an unmatched watch would strand far more than it protects.
+    stats.unmatchedAlerts = severe.filter((alert) => !alert.geometry).length;
+    return severe.filter((alert) => alert.geometry);
   }
 
   private async fetchCell(
@@ -202,19 +274,12 @@ export class WeatherCache {
     if (this.jitterMs > 0) await this.sleep(Math.floor(this.random() * this.jitterMs));
 
     try {
-      const [forecast, alerts] = await Promise.all([
-        this.client.getForecast(center),
-        this.client.getActiveAlerts(center),
-      ]);
-
-      const impassable =
-        this.config.get('weather.severe_alert_impassable') &&
-        alerts.some((alert) => isSevereAlert(alert, now));
+      const forecast = await this.client.getForecast(center);
 
       if (forecast === null) {
         // No NWS coverage here (Canada, Mexico, offshore). Not an outage.
         stats.failOpen++;
-        return { ...this.failOpenEntry(cell, now), impassable };
+        return this.failOpenEntry(cell, now);
       }
 
       const condition = mapNwsCondition(forecast.shortForecast);
@@ -225,7 +290,7 @@ export class WeatherCache {
         windMph: parseWindSpeedMph(forecast.windSpeed),
         windDirFromDeg: parseWindDirection(forecast.windDirection),
         timeMult: this.timeMultFor(condition),
-        impassable,
+        impassable: false, // decided by the pass-level alert set
         weatherUnknown: condition === 'unknown',
         fetchedAt: now,
         source: 'nws',

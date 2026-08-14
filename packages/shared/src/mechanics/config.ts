@@ -93,6 +93,8 @@ const VALIDATORS: Record<MechanicsKey, Validator> = {
   'routing.delivery_check_interval_minutes': isFiniteNumber,
   'routing.dissipation_check_interval_hours': isFiniteNumber,
   'delivery.min_floor_minutes': isFiniteNumber,
+  'preview.token_ttl_minutes': isFiniteNumber,
+  'preview.eta_shift_warn_fraction': isFiniteNumber,
   'stranded.grace_hours': isFiniteNumber,
   'stranded.dissipation_chance_per_day': isFiniteNumber,
   'garble.gale_chance': isFiniteNumber,

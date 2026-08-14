@@ -153,7 +153,7 @@ describe('HttpNwsClient', () => {
     await expect(client.getForecast(POINT)).rejects.toBeInstanceOf(NwsUnavailableError);
   });
 
-  it('reads active alerts for a point', async () => {
+  it('reads every active alert in one request (REDTEAM F19)', async () => {
     const fetchImpl = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
       jsonResponse({
         features: [
@@ -163,10 +163,42 @@ describe('HttpNwsClient', () => {
       }),
     );
     const client = new HttpNwsClient({ userAgent: 'x', fetchImpl: fetchImpl as unknown as typeof fetch });
-    const alerts = await client.getActiveAlerts(POINT);
+    const alerts = await client.getActiveAlerts();
 
     expect(alerts).toHaveLength(2);
     expect(alerts.filter((a) => isSevereAlert(a, NOW))).toHaveLength(1);
-    expect(String(fetchImpl.mock.calls[0]![0])).toContain('/alerts/active?point=40.7500,-74.0000');
+    expect(String(fetchImpl.mock.calls[0]![0])).toContain('/alerts/active?status=actual');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('carries alert geometry through, so cells can be matched locally', async () => {
+    const geometry = {
+      type: 'Polygon' as const,
+      coordinates: [
+        [
+          [-75, 40],
+          [-73, 40],
+          [-73, 42],
+          [-75, 42],
+          [-75, 40],
+        ],
+      ],
+    };
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      jsonResponse({ features: [{ properties: alert(), geometry }] }),
+    );
+    const client = new HttpNwsClient({ userAgent: 'x', fetchImpl: fetchImpl as unknown as typeof fetch });
+    const [first] = await client.getActiveAlerts();
+    expect(first!.geometry).toEqual(geometry);
+  });
+
+  it('reports a null geometry rather than dropping the alert', async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      jsonResponse({ features: [{ properties: alert({ event: 'Tornado Watch' }), geometry: null }] }),
+    );
+    const client = new HttpNwsClient({ userAgent: 'x', fetchImpl: fetchImpl as unknown as typeof fetch });
+    const [first] = await client.getActiveAlerts();
+    expect(first!.geometry).toBeNull();
+    expect(first!.event).toBe('Tornado Watch');
   });
 });
