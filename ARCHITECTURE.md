@@ -48,7 +48,7 @@ create table profiles (
   id uuid primary key references auth.users,
   handle text unique not null,          -- @name, 3-20 chars
   display_name text,
-  home_cell text not null,              -- cell id, e.g. "r041c112" (coarse!)
+  home_cell text not null,              -- cell id, e.g. "r037c090" = Newark (coarse!)
   last_active_at timestamptz,
   expo_push_token text,
   created_at timestamptz default now()
@@ -137,16 +137,23 @@ IN_FLIGHT ──(final waypoint eta reached)────> DELIVERED   [apply gar
 
 ## 5. Cell math (packages/shared)
 
-- Equirectangular 50 km grid over launch bbox (MECHANICS §1): `cellId(lat,lng)`, `cellCenter(id)`, `neighbors(id)` (8-connected), `cellsAlongGreatCircle(a,b)` for lazy weather prefetch.
+- **Uniform equirectangular** 50 km grid over the launch bbox (MECHANICS §1): `cellId(lat,lng)`, `cellCenter(id)`, `neighbors(id)` (8-connected), `cellsAlongGreatCircle(a,b)` for lazy weather prefetch.
+- **Locked geometry.** The grid is 57 rows × 106 columns = 6,042 cells; row 0 is the southernmost, column 0 the westernmost; ids are `r%03dc%03d`, e.g. **`r037c090`** (Newark) or `r039c066` (Chicago). Cells are 50 km tall everywhere and 50 km wide at the bbox's centre latitude (57 km at 24°N, 40 km at 49.5°N). The grid is the smallest cell-aligned rectangle covering the bbox, so `cellId(cellCenter(id)) === id` holds for edge cells too.
+- **Cell ids are persisted identifiers** (`profiles.home_cell`, `messages.route`, `weather_cells.cell`, the land mask). Re-gridding is a data migration, never a config edit — which is why grid geometry is compiled in and only *checked* against `mechanics_config` at startup, not read from it.
+- **Land mask (MECHANICS §1.1).** A static per-cell `is_land` bitmap, generated at build time from Natural Earth land polygons and committed as generated data alongside the cell math. `isTraversable(cell)` = `is_land` OR 8-adjacent to land; everything else is open ocean and permanently impassable. Regenerating it is part of any grid change.
 - Deterministic, pure, fully unit-tested — this module is the foundation everything trusts.
 
 ## 6. Engine service
 
 ### 6.1 Weather cache
 - `getCellWeather(cells[])`: serve from `weather_cells` if `fetched_at` < TTL; else fetch NWS gridpoint forecast for cell center, map condition → `time_mult`/`impassable` per MECHANICS §2.1, upsert. Batch, jittered, rate-limit aware. **Fail-open:** on 429/5xx/timeout serve stale; beyond 2×TTL treat as clear + `weather_unknown` (MECHANICS §2.1). Impassable requires an *active NWS severe warning/watch* (alerts endpoint), not just a stormy forecast.
+- **Never fetch a non-traversable cell** (MECHANICS §1.1): open ocean has no weather because it has no route. Fail-open must not turn the Atlantic into a clear-sky highway.
 
 ### 6.2 Router
-- A* over 8-connected grid. Edge cost hours = `cell_km / (base × weather_mult × wind_mult)`; diagonal = ×1.414 distance. Impassable = pruned. Heuristic: `great_circle_km / (base_speed / 0.7)` — divides by the **maximum achievable speed** (full tailwind boost) to remain admissible; using bare base_speed would overestimate under tailwind and break optimality.
+- A* over the 8-connected grid.
+- **Edge cost (hours) = `(cell_km / speed.base_kmh) × weather_mult × wind_mult`**, where `cell_km` is the hop length (diagonal = ×1.414). Every multiplier acts on **time**: higher = slower (MECHANICS §2, §2.1, §2.2). The older "`cell_km / (base × mult)`" phrasing was inverted — under it a thunderstorm made smoke 6× faster — and is retired.
+- **Heuristic = `great_circle_km × 0.7 / speed.base_kmh`** — the distance flown at the fastest the sky ever allows (full tailwind, `wind_mult` floor 0.7). Admissible: no path can beat 0.7× time over a distance no shorter than the great circle. (Note for v1.1: `relay_mult` = 0.1 would lower the floor and the heuristic factor must drop with it.)
+- **Traversability:** a cell is pruned if it is impassable (active severe alert) or non-traversable (open ocean, MECHANICS §1.1). Never costed, never entered.
 - Returns `{route, segment_etas, total_hours}` or `NO_ROUTE`.
 - Pure function of (origin, dest, weather snapshot) → property-testable with synthetic storm fixtures.
 
@@ -159,10 +166,15 @@ IN_FLIGHT ──(final waypoint eta reached)────> DELIVERED   [apply gar
 
 ### 6.4 API surface (thin — most reads go straight to Supabase)
 ```
-POST /send        {recipient, body} → validates flock, computes route preview? No —
-POST /preview     {recipient, body} → {route, eta, storms_avoided[]}   (pre-send preview)
-POST /send        confirms with a preview token (route may be recomputed if stale >5m)
-POST /resend      {message_id} → new message, fresh route
+POST /preview   {recipient, body}
+                → {route, eta, storms_avoided[], preview_token}   preview_token valid 10 min
+
+POST /send      {recipient, body, preview_token}
+                → engine revalidates flock/blocks, recomputes the route if the weather
+                  snapshot behind the token has changed, and warns the client when the
+                  new ETA differs from the previewed one by more than 20%
+
+POST /resend    {message_id} → new message row, fresh route
 ```
 Everything else (flock CRUD, message list, flight state) = Supabase client + RLS + realtime subscription on `messages` and `events`.
 

@@ -89,7 +89,7 @@ Every one of these must look good enough to post:
 
 ## 9. Open questions (to resolve in red-team)
 
-- GPS spoofing: does teleporting yourself matter? (Probably harmless-fun; decide.)
-- Home-location vs live-location for routing endpoints (privacy vs realism).
-- What happens when recipient has no location set (never opened app after invite)?
-- Server cost ceiling before monetization exists.
+- GPS spoofing: does teleporting yourself matter? (Probably harmless-fun; decide.) → **Closed** (REDTEAM F9): unmitigated in v1.
+- Home-location vs live-location for routing endpoints (privacy vs realism). → **Closed** (REDTEAM F6): manual-refresh `home_cell`, never live location.
+- What happens when recipient has no location set (never opened app after invite)? → **Closed:** it cannot happen. `home_cell` is set during onboarding, before a flock request can be accepted, and a message can only be sent to *accepted* flock. Every recipient therefore has a cell by construction; the schema enforces it (`profiles.home_cell NOT NULL`). A stale cell is fine — the registration cell is the documented fallback (MECHANICS §4).
+- Server cost ceiling before monetization exists. → **Closed** (REDTEAM F9, MECHANICS §9): inside hobby tiers; Supabase Pro ($25/mo) is the pressure valve.

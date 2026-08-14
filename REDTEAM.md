@@ -45,5 +45,31 @@ Flock-only messaging means: invite → install → accept → send. Three steps 
 
 ---
 
+# Addendum — M1 architect review (rulings)
+
+Findings raised while implementing M1, ruled on and patched into the docs.
+
+## F11 — Multipliers were applied to speed, not time (SEVERE, correctness)
+**Attack:** MECHANICS §2 said `effective speed = base × weather_mult × wind_mult` and ARCHITECTURE §6.2 repeated `hours = cell_km / (base × mult)`. Read literally, a thunderstorm (6.0) makes smoke **six times faster** and a headwind speeds it up. The §7C worked example (light rain doubling the hours) contradicts both.
+**Resolution:** The multipliers are **time multipliers**, always: `hours = (cell_km / speed.base_kmh) × weather_mult × wind_mult`, `wind_mult ∈ [0.7, 1.6]`. The "effective speed = base × mult" phrasing is deleted everywhere. The heuristic stays `great_circle_km × 0.7 / speed.base_kmh` and is admissible under this reading. (MECHANICS §2, §2.2, §4; ARCHITECTURE §6.2 patched.)
+
+## F12 — Two base speeds (MEDIUM, correctness)
+**Attack:** "20 mph (32 km/h)" gives two different numbers (20 mph = 32.19 km/h); code could compute from either and drift.
+**Resolution:** `speed.base_kmh = 32` is **canonical** — all computation is metric. "20 mph" is UI flavor copy; `speed.base_mph` is deprecated and read only by display strings. (MECHANICS §2, §8 patched.)
+
+## F13 — Fail-open turns the ocean into a highway (HIGH, gameplay)
+**Attack:** Unfetched ocean cells fail open to clear (1.0×), so the Atlantic and Gulf become the cheapest terrain in the graph. A* would route Newark→Miami offshore around every storm, and coastal messages would sail rather than travel — the exact opposite of "smoke can't cross the sea."
+**Resolution:** A static per-cell `is_land` mask generated at build time from Natural Earth land polygons, committed as generated data in `packages/shared`. Traversable = land OR 8-adjacent to land; open ocean is impassable *always*, never fetched, never fail-opened. (MECHANICS §1.1 added; ARCHITECTURE §5, §6.1, §6.2 patched.)
+
+## F14 — The send/preview contract was a note-to-self (LOW, clarity)
+**Attack:** ARCHITECTURE §6.4 contained an unresolved thought ("computes route preview? No —") where the API contract should be.
+**Resolution:** `POST /preview` returns `{route, eta, storms_avoided, preview_token}` with a 10-minute token; `POST /send` takes the token, recomputes if the weather moved, and warns when the ETA shifted by more than 20%. (ARCHITECTURE §6.4 patched.)
+
+## F15 — Grid geometry was under-specified (LOW, correctness)
+**Attack:** "Equirectangular 50 km grid" left uniform-vs-per-row spacing open, and the example id `r041c112` does not exist in any 50 km CONUS grid (there are only 106 columns).
+**Resolution:** Uniform equirectangular, locked at 57 × 106; real example ids (`r037c090` Newark, `r039c066` Chicago); cell ids are persisted identifiers and re-gridding is a data migration. (ARCHITECTURE §3, §5 patched.)
+
+---
+
 ## Verdict
 No unresolved severe findings. F1 and F5 were the two that would have materially hurt launch; both are now v1 scope. Design is cleared for Phase 3 (implementation).
