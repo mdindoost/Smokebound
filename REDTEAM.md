@@ -71,5 +71,25 @@ Findings raised while implementing M1, ruled on and patched into the docs.
 
 ---
 
+# Addendum — M2 architect review (rulings)
+
+## F16 — Foreign land is the ocean hole again (HIGH, gameplay)
+**Attack:** The land mask closed the water hole but not the border. Natural Earth "land" includes Canada and Mexico, where NWS has no data, so every foreign cell fails open to permanently clear — a free highway around any storm. Detroit→Buffalo would route through Ontario; northern-tier traffic would drift into Canada whenever the weather turned.
+**Resolution:** Add an `is_us` mask layer (Natural Earth admin-0, United States), rasterised identically, with border cells decided by **majority sample**. Traversable = `(is_us OR 8-adjacent to US land) AND NOT foreign_land`; non-US land is impassable in v1. This is a launch-region rule tied to our US-only weather source and reopens with international expansion. In-app copy: *"Your smoke cannot cross the border."* (MECHANICS §1.1, ARCHITECTURE §5 patched.)
+
+## F17 — NO_ROUTE was a send failure (MEDIUM, product)
+**Attack:** A walled-off sky or a recipient sitting under a severe warning made `/send` fail. The user experience of "the storm is too big" became an error dialog — the one moment the product's whole premise is on screen, rendered as a bug.
+**Resolution:** The message is **always** created. `NO_ROUTE` at send means the message transmits and then strands at its origin cell (`TRANSMITTING → STRANDED`), and the replan cron retries it every cycle like any other stranded message. `NO_ROUTE` is never an API failure. (ARCHITECTURE §4 patched.)
+
+## F18 — Preview priced routes on guesses (MEDIUM, correctness)
+**Attack:** Fail-open prices unfetched cells as clear, which makes unknown terrain *attractive* to A*. A preview could therefore route confidently through cells nobody had ever looked at, quote an ETA from that, and commit it.
+**Resolution:** `/preview` fetches the weather for every unknown cell on its candidate route and re-routes **once** before returning. A committed route is never priced on fail-open guesses. Mid-flight replanning is unchanged: there, availability beats precision (F4). (ARCHITECTURE §6.4 patched.)
+
+## F19 — Silent heuristic breakage, and per-cell alert fetches (LOW, correctness + cost)
+**Attack:** `routing.heuristic_max_speed_factor` is a config value; tune it — or the wind floor — the wrong way and A* stops being optimal with no symptom except quietly worse routes. Separately, fetching alerts per cell multiplied NWS traffic by the corridor length for no extra information.
+**Resolution:** The engine asserts at boot that the heuristic factor is ≤ the smallest achievable time multiplier from config, and **fails to start** otherwise. Alerts are fetched in bulk per pass and matched to cells locally. (ARCHITECTURE §6.1, §6.2 patched.)
+
+---
+
 ## Verdict
 No unresolved severe findings. F1 and F5 were the two that would have materially hurt launch; both are now v1 scope. Design is cleared for Phase 3 (implementation).

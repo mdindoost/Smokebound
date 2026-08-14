@@ -126,12 +126,20 @@ RLS: profiles readable by flock members; messages readable by sender+recipient o
 ## 4. Message state machine
 
 ```
-TRANSMITTING ──(transmission_time elapsed)──> IN_FLIGHT
+TRANSMITTING ──(transmission_time elapsed, route exists)──> IN_FLIGHT
+TRANSMITTING ──(transmission_time elapsed, NO_ROUTE)─────> STRANDED  [stranded_cell = origin]
 IN_FLIGHT ──(next cell impassable @replan)──> STRANDED
 STRANDED ──(finite route found @replan)─────> IN_FLIGHT   [route replaced from current cell]
 STRANDED ──(dissipation roll succeeds)──────> LOST
 IN_FLIGHT ──(final waypoint eta reached)────> DELIVERED   [apply garbles → body_delivered]
 ```
+
+**A send never fails for want of a route.** If the router returns `NO_ROUTE` — the sky is
+walled off, or the recipient's own cell is under a severe warning — the message is still
+created and still transmits; it simply strands at its origin and the replan cron retries
+it every cycle like any other stranded message. `NO_ROUTE` is a state of the weather, not
+an error of the API: the user lit the fire, and the fire is lit. The 24 h dissipation
+grace (MECHANICS §6.1) starts when it strands, wherever it stranded.
 - All transitions happen ONLY in the engine service crons — single writer, no client races.
 - `DELIVERED` and `LOST` are terminal. Re-send creates a new message row (thread by (sender,recipient)).
 
@@ -140,20 +148,22 @@ IN_FLIGHT ──(final waypoint eta reached)────> DELIVERED   [apply gar
 - **Uniform equirectangular** 50 km grid over the launch bbox (MECHANICS §1): `cellId(lat,lng)`, `cellCenter(id)`, `neighbors(id)` (8-connected), `cellsAlongGreatCircle(a,b)` for lazy weather prefetch.
 - **Locked geometry.** The grid is 57 rows × 106 columns = 6,042 cells; row 0 is the southernmost, column 0 the westernmost; ids are `r%03dc%03d`, e.g. **`r037c090`** (Newark) or `r039c066` (Chicago). Cells are 50 km tall everywhere and 50 km wide at the bbox's centre latitude (57 km at 24°N, 40 km at 49.5°N). The grid is the smallest cell-aligned rectangle covering the bbox, so `cellId(cellCenter(id)) === id` holds for edge cells too.
 - **Cell ids are persisted identifiers** (`profiles.home_cell`, `messages.route`, `weather_cells.cell`, the land mask). Re-gridding is a data migration, never a config edit — which is why grid geometry is compiled in and only *checked* against `mechanics_config` at startup, not read from it.
-- **Land mask (MECHANICS §1.1).** A static per-cell `is_land` bitmap, generated at build time from Natural Earth land polygons and committed as generated data alongside the cell math. `isTraversable(cell)` = `is_land` OR 8-adjacent to land; everything else is open ocean and permanently impassable. Regenerating it is part of any grid change.
+- **Land mask (MECHANICS §1.1).** Two static per-cell bitmaps generated at build time from Natural Earth and committed as generated data alongside the cell math: `is_land` (1:10m land) and `is_us` (1:10m admin-0, United States), rasterised identically, with border cells resolved by majority sample. `isTraversable(cell)` = (`is_us` OR 8-adjacent to a US-land cell) AND NOT foreign land. Open ocean and foreign land are permanently impassable — the first because smoke cannot cross water, the second because our weather source stops at the border and fail-open would otherwise make Canada and Mexico the cheapest terrain on the map. Regenerating both layers is part of any grid change.
 - Deterministic, pure, fully unit-tested — this module is the foundation everything trusts.
 
 ## 6. Engine service
 
 ### 6.1 Weather cache
 - `getCellWeather(cells[])`: serve from `weather_cells` if `fetched_at` < TTL; else fetch NWS gridpoint forecast for cell center, map condition → `time_mult`/`impassable` per MECHANICS §2.1, upsert. Batch, jittered, rate-limit aware. **Fail-open:** on 429/5xx/timeout serve stale; beyond 2×TTL treat as clear + `weather_unknown` (MECHANICS §2.1). Impassable requires an *active NWS severe warning/watch* (alerts endpoint), not just a stormy forecast.
-- **Never fetch a non-traversable cell** (MECHANICS §1.1): open ocean has no weather because it has no route. Fail-open must not turn the Atlantic into a clear-sky highway.
+- **Never fetch a non-traversable cell** (MECHANICS §1.1): open ocean and foreign land have no weather because they have no route. Fail-open must not turn the Atlantic — or Ontario — into a clear-sky highway.
+- **Alerts are fetched in bulk, not per cell.** One active-alerts request per pass covers the whole launch region; cells are matched against alert geometry locally. Per-cell alert lookups multiply request volume by the size of the corridor for no extra information.
 
 ### 6.2 Router
 - A* over the 8-connected grid.
 - **Edge cost (hours) = `(cell_km / speed.base_kmh) × weather_mult × wind_mult`**, where `cell_km` is the hop length (diagonal = ×1.414). Every multiplier acts on **time**: higher = slower (MECHANICS §2, §2.1, §2.2). The older "`cell_km / (base × mult)`" phrasing was inverted — under it a thunderstorm made smoke 6× faster — and is retired.
 - **Heuristic = `great_circle_km × 0.7 / speed.base_kmh`** — the distance flown at the fastest the sky ever allows (full tailwind, `wind_mult` floor 0.7). Admissible: no path can beat 0.7× time over a distance no shorter than the great circle. (Note for v1.1: `relay_mult` = 0.1 would lower the floor and the heuristic factor must drop with it.)
-- **Traversability:** a cell is pruned if it is impassable (active severe alert) or non-traversable (open ocean, MECHANICS §1.1). Never costed, never entered.
+- **Traversability:** a cell is pruned if it is impassable (active severe alert) or non-traversable (open ocean or foreign land, MECHANICS §1.1). Never costed, never entered.
+- **Startup guard:** the engine asserts on boot that `routing.heuristic_max_speed_factor` is ≤ the smallest time multiplier the config can produce (today `wind.tailwind_min_mult` × the minimum weather multiplier). If a tuning edit ever makes the heuristic optimistic, A* stops being optimal *silently* — so this is a boot failure, not a warning. When v1.1 relays ship, `relay_mult` enters the same computation.
 - Returns `{route, segment_etas, total_hours}` or `NO_ROUTE`.
 - Pure function of (origin, dest, weather snapshot) → property-testable with synthetic storm fixtures.
 
@@ -176,6 +186,19 @@ POST /send      {recipient, body, preview_token}
 
 POST /resend    {message_id} → new message row, fresh route
 ```
+
+**Preview resolves its own unknowns.** A first pass may route through cells whose weather
+we have never fetched — and under fail-open those cells are priced as clear, which makes
+them *attractive*. So `/preview` fetches the weather for every unknown cell on its
+candidate route and re-routes once before returning. A committed route is never priced on
+a guess. (In-flight replanning keeps the plain fail-open behaviour: mid-flight we favour
+availability over precision, per REDTEAM F4.)
+
+**Transports.** The same handlers are exposed two ways, chosen by config: as HTTP
+endpoints, and as a Supabase table-polling worker where the client inserts a request row
+and the engine writes a response row. The beta runs from a home server behind NAT, so it
+must be able to operate fully outbound — the table transport is not a fallback, it is the
+launch configuration.
 Everything else (flock CRUD, message list, flight state) = Supabase client + RLS + realtime subscription on `messages` and `events`.
 
 ## 7. Client screens (maps to UX spec, forthcoming)

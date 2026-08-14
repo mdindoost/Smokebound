@@ -13,21 +13,31 @@ All gameplay numbers live here and ONLY here. Implementation must read these fro
 - Weather source: **NWS API** (free, no key, US-only — fine for v1). Cache TTL: **30 min** (TUNE).
 - Cells fetched lazily: only cells inside the bounding boxes of in-flight routes (+1 cell padding).
 
-### 1.1 The ocean rule (land mask)
+### 1.1 The land mask: sea and border rules
 
-The fail-open rule (§2.1) has a hole over water: an unfetched ocean cell would be
-treated as permanently clear, making the Atlantic the cheapest highway in the graph.
-A* would then route Newark→Miami straight out to sea around every storm. So:
+The fail-open rule (§2.1) has a hole anywhere NWS has no data. An unfetched cell is
+priced as permanently clear, so the Atlantic — and, just as badly, Canada and Mexico —
+would be the cheapest terrain in the graph. A* would route Newark→Miami out to sea and
+Detroit→Buffalo through Ontario, around every storm. Both holes are closed structurally,
+not by weather:
 
-- A **static per-cell `is_land` mask** is generated at build time from Natural Earth
-  land polygons and committed as generated data in `packages/shared`. It is data, not a
-  tunable — it changes only when the grid changes.
-- **Traversable = `is_land` OR 8-adjacent to a land cell.** That one-cell skirt keeps
-  coastal routing natural (Newark, Miami and Seattle all sit on the coast) without
-  opening the open ocean.
-- **Open-ocean cells are impassable, always** — no weather fetch, no cost, no route.
-  In fiction: smoke cannot cross open water. This is a hard structural rule, not a
-  weather condition, and it is never overridden by fail-open.
+- Two **static per-cell mask layers** are generated at build time from Natural Earth and
+  committed as generated data in `packages/shared`: `is_land` (1:10m land polygons) and
+  `is_us` (1:10m admin-0, United States), rasterised identically. They are data, not
+  tunables — they change only when the grid changes.
+- **Border cells are decided by majority sample:** a cell straddling the border is US if
+  most of its land sample points are US, and foreign otherwise. Every cell is therefore
+  exactly one of: US land, foreign land, or water.
+- **Traversable = (`is_us` OR 8-adjacent to a US-land cell) AND NOT foreign land.**
+  The one-cell skirt keeps coastal routing natural (Newark, Miami and Seattle all sit on
+  the coast); the foreign-land exclusion keeps smoke inside the launch region.
+- **Open ocean and foreign land are impassable, always** — no weather fetch, no cost, no
+  route. These are hard structural rules, not weather conditions, and fail-open never
+  overrides them. In fiction: smoke cannot cross open water, and it cannot cross the
+  border. In copy: *"Your smoke cannot cross the border."*
+- The border rule is a **v1 launch-region rule, not a permanent one.** It exists because
+  our weather source is US-only; it reopens with international expansion (SPEC §3 v2),
+  when a global weather provider makes foreign cells routable.
 - Weather for traversable coastal-water cells is fetched normally; NWS marine zones do
   return data near shore, and fail-open covers the cells where they do not.
 
@@ -129,10 +139,20 @@ A* would then route Newark→Miami straight out to sea around every storm. So:
 - Delivered footnote: "This signal traveled X mi. On foot: Y min." (walking est = distance / 3 mph)
 - v1.1 **"Come to the fire"**: textless summons signal for same/adjacent-cell flock members — recipient gets "[handle] has lit a fire nearby. Come." + map pin. 10-min floor waived (TUNE); designed for campus use.
 
-**C. Newark → Miami (~1,750 km) in light rain half the route**
-- (875/32) + (875/32 × 2.0) ≈ 27 + 55 ≈ **82 h (~3.4 days)**. Long-haul messages are multi-day events. Intended.
+**C. Newark → Miami in light rain half the route**
+- The great circle is ~1,750 km, but smoke follows the coast: the land-hugging corridor
+  the ocean rule (§1.1) forces is **~1,965 km**, about 12% longer.
+- Clear the whole way: 1,965 / 32 ≈ **61 h**. Light rain over half of it:
+  (982/32) + (982/32 × 2.0) ≈ 31 + 61 ≈ **92 h (~3.8 days)**. Long-haul messages are
+  multi-day events. Intended.
 
 ## 8. Numbers most likely to need beta tuning, in order
+
+> **Estimating caveat:** great-circle arithmetic under-states real routes. The land mask
+> (§1.1) forces coastal and border-adjacent traffic onto longer corridors, so long coastal
+> routes run **~10–15% over** a straight-line estimate. Quote ETAs from the router, never
+> from distance ÷ speed.
+
 1. Base speed (`speed.base_kmh` = 32) — sets the entire feel.
 2. Minimum delivery floor (10 min) & same-city times.
 3. Garble probability/severity.
