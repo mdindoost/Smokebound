@@ -20,6 +20,9 @@ icons and splash, EAS build, TestFlight.
 
 ---
 
+> **Credentials:** see [SECURITY.md](SECURITY.md) — the standing audit, what each
+> secret can do, and the by-hand rotation runbook.
+
 ## Layout
 
 ```
