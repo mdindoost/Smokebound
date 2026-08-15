@@ -132,7 +132,8 @@ export function TowerMark({ cell, name }: { cell: CellId; name: string }) {
             width: 5,
             height: 5,
             borderRadius: 3,
-            backgroundColor: sky.trailGlow,
+            // Not `trailGlow`: a tower is a landmark, and only the smoke glows.
+            backgroundColor: sky.towerLight,
             marginBottom: 1,
           }}
         />

@@ -100,3 +100,13 @@ describe('V4: state semantics stay elegiac', () => {
     }
   });
 });
+
+describe('only the smoke glows (DESIGN.md V2)', () => {
+  it('does not give a tower the ember glow', () => {
+    // The tower lamp was painted with the smoke's own glow colour, so every
+    // landmark read as a second fire — visible the moment the towers were
+    // enlarged on a genuinely dark panel.
+    expect(sky.towerLight).not.toBe(sky.trailGlow);
+    expect(sky.towerLight).not.toBe(sky.trail);
+  });
+});

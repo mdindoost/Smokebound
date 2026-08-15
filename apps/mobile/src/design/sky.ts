@@ -34,6 +34,15 @@ export const sky = {
   lost: palette.ash,
   /** A tower mark. */
   tower: '#C7B79A',
+  /**
+   * The lamp on a tower: unlit stone, not fire.
+   *
+   * This was the ember glow, which made every tower a second small fire on a map
+   * whose whole rule is that only the smoke glows (V2). It read as another
+   * signal — the first person to see it on a dark panel asked which one was
+   * their message.
+   */
+  towerLight: '#9C8F7A',
   /** A cell whose weather we are guessing (MECHANICS §2.1 fail-open). */
   unknown: '#6E7C88',
   /** A storm the route steered around. */
