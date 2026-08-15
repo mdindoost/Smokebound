@@ -1,8 +1,8 @@
-# SMOKE — Mechanics Specification v2.0 (DRAFT — design only)
+# SMOKE — Mechanics Specification v2.0
 
-**Status: draft for architect red-team. Nothing here is implemented.** No code, no
-migrations, no config rows exist for any mechanic below. Every number is a proposal
-until ruled on.
+**Status: ruled and cleared for implementation.** Red-teamed as REDTEAM F32–F43; every
+open question in §8 has an answer and the amendments are folded in below. Numbers marked
+TUNE remain tunable; everything else is decided.
 
 Companion to MECHANICS.md, which remains authoritative for v1. This document adds one
 idea — **the sun** — and follows it honestly into every corner it reaches, including the
@@ -84,14 +84,25 @@ sentence on the flight screen ("a following wind") and the penalty in the router
 describe different weather. The sun deserves the same treatment before either side is
 built, not after they diverge.
 
-**Correction to the brief.** The brief refers to "the same computation the M5.5 cosmetic
-layer already uses." **No such layer exists.** M5.5 shipped no day/night rendering — a
-grep for night/dusk/dawn/solar logic across `services/engine/src`, `packages/shared/src`
-and the app returns nothing but a Keeper flavour line and a comment. The day/night
-cosmetic layer was proposed in the M5.5 input list but was not implemented, and was not
-ruled. So there is no existing computation to share with: the shared module is **new work
-in v2**, and the ordering obligation is that it be written once and consumed twice, rather
-than reconciled later. This is listed again in §8.
+**Correction to the brief, and the ruling on it** (REDTEAM F32). The V2 brief referred to
+"the same computation the M5.5 cosmetic layer already uses." **No such layer existed.**
+M5.5 shipped no day/night rendering — a grep for night/dusk/dawn/solar logic across
+`services/engine/src`, `packages/shared/src` and the app returned nothing but a Keeper
+flavour line and a comment. It was proposed in an input list, never built, never ruled.
+
+So the shared module is **new work in v2**, and F32 rules that the sun's physics and its
+theater **ship together in one milestone**: `packages/shared/src/geo/sun.ts` first, then
+both consumers. Written once and consumed twice, rather than reconciled later.
+
+**Theater runs ahead of mechanics, deliberately.** A separate flag
+`night.visuals_enabled` defaults to **true** — the map may show fire-at-night from day
+one, because the app should always be honest about what the sky looks like, and what the
+sky looks like does not depend on whether we have switched on a multiplier.
+
+The line that must not be crossed: **no copy anywhere may claim speed** — "travels faster
+as fire" and every cousin of it — unless `night.enabled` is true. Showing a fire is a
+description of the world. Saying it goes faster is a claim about the model, and until the
+flag is on it is a false one.
 
 ---
 
@@ -115,6 +126,13 @@ where `night_mult` = `night.time_mult` if the hop qualifies, else 1.0.
 0.75 is a 25% speed-up, chosen to be **felt but not dominant**: it is smaller than the
 gap between clear and overcast (1.15) times two, and much smaller than any precipitation
 penalty. Weather stays the loudest thing in the model. Night is a rhythm, not a shortcut.
+
+### 2.1.1 Transmission time is unchanged at night
+
+Working a fire shutter and puffing smoke are different physical acts, and the difference
+is **below the resolution of a model that charges 3 s per four characters** (REDTEAM F36).
+MECHANICS §3 stands unamended and there is no new key. One flavour line is permitted at a
+night-time origin — *"The fire speaks in flashes"* — carrying zero mechanics.
 
 ### 2.2 Entry-time governs the hop
 
@@ -223,14 +241,39 @@ in a gale would light the fire and stop trying to make smoke.
 fog, even in a gale, a hop entered at night rolls no garble. Fog stops you *seeing* the
 fire (which §3.2 charges for in time), but it cannot shred it.
 
+### 3.1.1 Two axes: integrity is information, speed is operations
+
+The draft of this document left `wind_mult` fully active at night and was rightly
+challenged: if wind cannot reach a beacon, why does it still slow one? The answer
+(REDTEAM F33) is that the question conflates two different things, and the draft's own
+wording invited it.
+
+**Integrity is information.** Garbling destroys the *shape* that carries the meaning. A
+fire's meaning is its presence, so there is no shape to destroy, so darkness is immunity.
+This is why `garble.daylight_only` exists.
+
+**Speed is operations.** `wind_mult` was never modelling information at all. It is the
+drag of running a signal station: keeping a fire lit, fed, banked and sightable through a
+gale is slow, dangerous work, and a crew fighting the wind is a slower crew whatever they
+are burning. Wind therefore applies to time in both regimes, always.
+
+Two axes, two rules, no contradiction. Approved flavour for a night gale:
+*"The fire bends in the wind, but holds."*
+
 ### 3.2 Fog and heavy precipitation blind both regimes
 
 The night bonus applies only when the air is clear enough to see a fire at range. The
 blinding set:
 
 ```
-night.blinding_conditions = [fog, mist, snow, heavy_rain, thunderstorm]
+night.blinding_conditions = [fog, mist, snow, heavy_rain, thunderstorm]      (TUNE)
 ```
+
+**Snow stays in the set, undivided** (REDTEAM F35). Heavy snow certainly blinds and
+flurries arguably do not, but NWS condition text does not reliably separate them, and a
+list an operator can explain beats a distinction the data cannot support. **Explicit
+revisit condition:** if beta logs show snow-blinding firing on flurries in a way testers
+notice, revisit against real NWS strings — not against intuition.
 
 In a blinding cell, `night_mult = 1.0` — the hop is priced at its ordinary daylight
 weather cost, with no bonus.
@@ -266,12 +309,11 @@ Two entries deserve comment.
 Drizzle does not hide a fire; fog does. This is the §3.2 point made concrete, and it is
 the row a reviewer should push back on if they disagree with the model.
 
-**A never-fetched cell gets the night bonus.** Under REDTEAM F29 an unlooked-at cell
-prices at 1.15 — like overcast — and overcast is not blinding, so consistency demands the
-bonus applies. The alternative (deny the bonus to unknown cells) would make unexplored
-terrain *doubly* expensive at night and would reintroduce a routing bias of exactly the
-kind F29 was written to remove, only with the sign flipped. Flagged in §8 because it is a
-judgement call, not a derivation.
+**A never-fetched cell gets the night bonus** (ruled, REDTEAM F34). Under F29 an
+unlooked-at cell prices at 1.15 — like overcast — and overcast is not blinding, so
+consistency demands the bonus applies. Denying it would make unexplored terrain *doubly*
+expensive after dark, reintroducing exactly the routing bias F29 was written to remove,
+with the sign flipped.
 
 ---
 
@@ -337,8 +379,17 @@ buying certainty it cannot afford. A route that is excellent but not provably sh
 the same trade, and the ETA band (F30) is already the right vehicle for admitting it.
 
 What must **not** happen is the app claiming optimality it does not have. No copy anywhere
-may say "the fastest route"; the honest words are *"the route"* or *"the way the sky is
+may say "the fastest route"; the approved words are *"the route"* and *"the way the sky is
 open"*.
+
+**This is public posture, not an internal caveat** (REDTEAM F41). One FAQ sentence carries
+it, in the Ledger voice:
+
+> *"The sky does not certify shortest paths."*
+
+The §4.2 sweep — leave ten minutes later, arrive thirteen minutes earlier — is recorded in
+LAUNCH.md as launch-thread material. A product whose premise is that the weather is in
+charge can afford to be interesting about the one place that premise bites the router.
 
 ### 4.5 Waiting at towers is deferred to v2.1 — named, not specified
 
@@ -358,6 +409,11 @@ different colours, and different push notifications.
 
 That deserves its own design document and its own red-team. Naming it here is the whole
 of the v2.0 obligation.
+
+**Confirmed v2.1, and designed after v2.0 beta data** (REDTEAM F40). The beta measures the
+empirical size of the FIFO gap — how often a replan corrects a frozen plan, and by how
+much. Designing a time-expanded graph before knowing whether the prize is thirteen minutes
+or three hours is speculation with a data source already on the calendar.
 
 ### 4.6 Admissibility: what the F19 guard must become
 
@@ -438,7 +494,14 @@ counsel.candidate_offsets_hours = [0, 2, 4]      (TUNE)
 counsel.include_dusk_dawn = true
 ```
 
-giving five candidates: now, +2 h, +4 h, next dusk at the origin, next dawn at the origin.
+giving five candidates: now, +2 h, +4 h, **next dusk at the origin**, next dawn at the
+origin.
+
+**Dusk means the sender's own sky** (REDTEAM F37) — the one out their window. The
+route-relative alternative (dusk at the route's first dark cell) is mechanically purer and
+completely invisible to the person being advised. Where intuition and purity conflict in
+advisory copy, intuition wins. Counsel says *"at dusk"*, **never a clock time** — the same
+philosophy as F30's bands.
 
 No new algorithm, no time-expanded graph, no waiting semantics — each candidate is an
 ordinary v2.0 frozen-cost plan (§4.4) with a different start instant. This is the entire
@@ -449,6 +512,18 @@ weather.
 
 A plan starting four hours from now must price cells by the weather **then**, not now. v1
 stores only current conditions, so counsel needs hourly forecasts.
+
+**Every candidate prices from the same product, including "now"** (REDTEAM F42). The draft
+priced the "now" candidate from `weather_cells` and every later candidate from
+`forecast_hours` — two products with different biases, which makes the comparison measure
+the products rather than the sky. Hourly forecasts are smoothed; if they run systematically
+milder than current-condition readings, counsel would recommend waiting for reasons that
+are entirely an artefact of which table was read, and the advice would look plausible every
+single time.
+
+So when counsel evaluates, **all five candidates read `forecast_hours`**, the "now"
+candidate taking the hour-0 row. `weather_cells` remains the router's authority for actual
+sends and replans — this is a comparison instrument, not a change to how messages fly.
 
 **Product:** `api.weather.gov` `/gridpoints/{office}/{gridX},{gridY}/forecast/hourly`,
 reached via the `forecastHourly` link in the existing `/points/{lat},{lng}` response —
@@ -470,6 +545,19 @@ reads. Two tables, two lifecycles, two TTLs. The router keeps its small hot tabl
 forecast.cache_ttl_minutes = 60      (TUNE — NWS regenerates hourly forecasts ~hourly)
 forecast.horizon_hours = 156
 ```
+
+**The table needs a janitor** (REDTEAM F43a). Rows whose `valid_hour` has passed are dead
+weight and nothing in the draft ever deleted them. They are swept by the existing
+dissipation-cadence cron family — hourly is ample for hourly data — and the growth bound
+is worth stating because it is the reassuring part:
+
+```
+max rows = forecast.horizon_hours × (cells ever warmed for counsel)
+```
+
+**never the whole grid.** Under F31 discipline only corridors with recent traffic are
+warmed, so a single active pair costs ~60 cells × 156 hours ≈ 9,400 rows. The bound scales
+with use, not with geography.
 
 ### 5.4 Cost envelope, under F31 discipline
 
@@ -499,11 +587,24 @@ cold-start shape as F28's budget, and the same answer — say less rather than w
 ### 5.5 When counsel should speak
 
 Per §2.3, the sun's value shrinks as routes lengthen. Counsel that fires on an 80-hour
-flight to save 20 minutes is noise wearing the costume of wisdom. Proposed threshold:
-counsel speaks only when the best candidate beats sending now by more than a stated
-fraction of the journey **and** by more than a stated absolute time — both numbers to be
-set at red-team, since this is a copy-frequency judgement as much as a mechanical one.
-Flagged in §8.
+flight to save 20 minutes is noise wearing the costume of wisdom.
+
+**Counsel speaks only when the best candidate beats sending now by at least** (REDTEAM F38):
+
+```
+max( counsel.min_abs_minutes , counsel.min_fraction × send_now_eta_hours )
+counsel.min_abs_minutes = 30      (TUNE)
+counsel.min_fraction    = 0.05    (TUNE)
+```
+
+**And counsel never proposes waiting longer than the time it saves.** Advice to wait four
+hours to arrive three hours sooner is not advice.
+
+Together with §2.3's finding, these two rules make counsel **confident on short routes and
+silent on long ones by construction** rather than by a tuned guess. On Newark→Pittsburgh
+(~15 h) the bar is 45 minutes and dusk clears it easily. On Newark→Denver (~80 h) the bar
+is four hours, which the sun cannot deliver on a route that long — so counsel says nothing,
+which is the correct thing to say.
 
 ---
 
@@ -514,6 +615,7 @@ Flagged in §8.
 | Key | Default | What it gates |
 |---|---|---|
 | `night.enabled` | **false** | The whole sun model: §2 traversal, §3 interactions |
+| `night.visuals_enabled` | **true** | Fire-at-night rendering (F32). Theater only; never gates copy that claims speed |
 | `night.time_mult` | 0.75 | Night traversal multiplier (TUNE) |
 | `night.twilight_elevation_deg` | −6.0 | Civil twilight threshold (§1.1) |
 | `night.blinding_conditions` | `[fog, mist, snow, heavy_rain, thunderstorm]` | Conditions that deny the bonus (§3.2) |
@@ -522,6 +624,8 @@ Flagged in §8.
 | `counsel.candidate_offsets_hours` | `[0, 2, 4]` | Candidate departure times (§5.2) |
 | `counsel.include_dusk_dawn` | true | Add next dusk and dawn as candidates |
 | `counsel.min_forecast_coverage` | 0.8 | Below this, counsel says nothing (§5.4) |
+| `counsel.min_abs_minutes` | 30 | Counsel stays quiet below this saving (F38, TUNE) |
+| `counsel.min_fraction` | 0.05 | …or below this fraction of the send-now ETA (F38, TUNE) |
 | `forecast.cache_ttl_minutes` | 60 | Hourly forecast TTL (§5.3) |
 | `forecast.horizon_hours` | 156 | How far ahead we keep hourly rows |
 | `routing.heuristic_max_speed_factor` | **0.7 → 0.525** | Existing key; must move with `night.enabled` (§4.6) |
@@ -539,8 +643,22 @@ garble rates and complaint rates with no sun in the model.
 
 **Week 2 — sun on.** In a single atomic change: `night.enabled = true`,
 `garble.daylight_only = true`, **and** `routing.heuristic_max_speed_factor = 0.525`.
-Atomic because the F19 guard makes the intermediate state a refused boot, which is the
-intended behaviour, not an obstacle to work around.
+
+**"Atomic" has an exact operator meaning** (REDTEAM F39): the guard evaluates a config
+snapshot **as a set**, so the flip must be **one SQL transaction touching all three keys**.
+
+```sql
+begin;
+  update mechanics_config set value = 'true'  where key = 'night.enabled';
+  update mechanics_config set value = 'true'  where key = 'garble.daylight_only';
+  update mechanics_config set value = '0.525' where key = 'routing.heuristic_max_speed_factor';
+commit;
+```
+
+Flip them in three separate statements and the engine may load an intermediate snapshot —
+night enabled against a 0.7 heuristic — which it will refuse to adopt, keeping the previous
+config and logging loudly. Nothing breaks, but the flip silently does not take effect,
+which is a worse kind of confusion than a failure.
 
 **Week 3 — counsel on.** `counsel.enabled = true` plus the forecast keys. No heuristic
 change: counsel adds evaluations, not edges.
@@ -561,13 +679,24 @@ knows which way is safe.
 The guard already includes `routing.unknown_cost_mult` in its `min()`; the night term joins
 it, gated on `night.enabled`.
 
-**One hole to close.** The guard runs at **boot**, and `mechanics_config` is a live table.
-Flipping `night.enabled` in the database while the engine is running enables the mechanic
-against an un-checked heuristic — the exact silent degradation F19 exists to prevent. Two
-candidate answers: require an engine restart for flag flips (operationally simple, but
-"restart to change config" undermines the point of a config table), or re-run the guard on
-every config reload and refuse to adopt a config that fails. This is a real gap in the
-existing design that v2 makes reachable. Listed in §8.
+**The hole, and how it is closed** (REDTEAM F39). F19's guard ran only at **boot**, while
+`mechanics_config` is a live table — so flipping `night.enabled` on a running engine would
+enable the mechanic against an unchecked heuristic, which is the exact silent degradation
+F19 exists to prevent.
+
+Restart-required was **rejected**: "restart the server to change config" defeats the point
+of having a config table.
+
+**The engine guards adoption, not boot.** Every config snapshot it loads — at boot and on
+reload, by the same code path — is validated as a set. An invalid snapshot is **not
+adopted**: the engine keeps the **last good config**, logs loudly, and fires the dead-man
+alert channel.
+
+This is the only correct semantics given the operator reality, and the reason is worth
+stating: **config writes are raw SQL.** The engine cannot refuse the write. It can only
+refuse to believe it. So the guarantee is not "invalid config cannot exist" but "invalid
+config cannot take effect" — and the loud log is what turns the second into something an
+operator finds out about.
 
 ---
 
@@ -620,78 +749,69 @@ and assert:
 - the replan produces an arrival **no later** than the frozen plan predicted; and
 - where the frozen plan was suboptimal, the corrected route measurably improves it.
 
+**Both assertions hold only under fixture weather held constant** (REDTEAM F43b). If the
+sky legitimately worsens mid-flight, a replan *should* return a later arrival, and a test
+that forbids it would be asserting something false about the world. The fixture condition
+is therefore part of the obligation, not an implementation detail — state it in the test,
+or the suite eventually teaches everyone to distrust a failure that was honest.
+
 Without this test, "replan-corrected" is a claim rather than a mechanism. With it, the
 honest label in §4.4 is backed by something.
 
 ---
 
-## 8. Open questions for the architect
+## 8. The questions, and their rulings
 
-Policy calls, contradictions and judgement calls, listed rather than resolved.
+All ten were answered in the V2 red-team (REDTEAM F32–F41), and two further findings —
+F42 and F43 — were raised against the draft itself. Kept here as the record of what was
+asked and what was decided.
 
-1. **The M5.5 cosmetic sun layer does not exist.** The brief assumes one to share code
-   with; it was proposed but never implemented or ruled. §1.3 treats the shared module as
-   new v2 work. Confirm — and rule whether the *visual* day/night layer (fire vs smoke on
-   the map) ships with v2 mechanics or separately, since the two are now coupled by the
-   shared-definition obligation.
+1. **Shared sun module and the missing cosmetic layer** → **F32.** Confirmed: no layer
+   existed, the brief was wrong, the record now says so. Physics and theater ship in one
+   milestone, `sun.ts` first. New flag `night.visuals_enabled` (default true) lets the map
+   show fire from day one; no copy may claim *speed* unless `night.enabled` is true.
 
-2. **Does wind still act on time at night?** §3.1 rules that wind cannot *garble* a beacon.
-   It does not follow that wind cannot *slow* one — but the fiction pulls that way: if a
-   flame's signal is its presence rather than its shape, a headwind arguably should not
-   retard it either. Leaving `wind_mult` fully active at night is internally inconsistent
-   with the reason given for garble immunity. Needs a ruling; I have deliberately not
-   assumed one.
+2. **Does wind still act on time at night?** → **F33.** Yes, fully. The apparent
+   inconsistency was a category error in the draft's wording: integrity is information
+   (immune), speed is operations (never immune). See §3.1.1.
 
-3. **Should never-fetched cells get the night bonus?** §3.3 grants it, reasoning from F29
-   that unknown prices as overcast and overcast is not blinding. The alternative makes the
-   unexplored doubly expensive at night and reintroduces a routing bias with the sign
-   flipped. Judgement call.
+3. **Do never-fetched cells get the night bonus?** → **F34.** Yes, as drafted. Denying it
+   reintroduces F29's bias with the sign flipped.
 
-4. **Is snow blinding?** It is in the proposed set on visibility grounds, but it is the
-   least obvious member — heavy snow certainly, light snow arguably not, and NWS condition
-   text does not always distinguish them. Fog, heavy rain and thunderstorm are
-   uncontroversial; snow is the row to argue about.
+4. **Is snow blinding?** → **F35.** Stays in the set, undivided, marked TUNE with an
+   explicit revisit condition against real NWS strings.
 
-5. **Does night change transmission time?** MECHANICS §3 charges 3 s per 4 characters to
-   puff a message out at the origin. Lighting and dousing a fire is a different physical
-   act from making smoke puffs, and might reasonably be faster, slower, or unchanged. v2.0
-   assumes unchanged. Unruled.
+5. **Does night change transmission time?** → **F36.** No. Below the model's resolution.
+   One flavour line, zero mechanics.
 
-6. **Whose dusk does counsel mean?** §5.2 proposes "next dusk **at the origin**" — the
-   sender's own sky, which is what they can see out of the window. The alternative (dusk at
-   the *route's* first dark cell) is more mechanically accurate and less intuitive. Product
-   call.
+6. **Whose dusk does counsel mean?** → **F37.** The origin's — the sender's own sky.
 
-7. **Counsel's speaking threshold.** §5.5 leaves both numbers unset — the fractional gain
-   and the absolute-time floor below which counsel stays quiet. This is a copy-frequency
-   decision as much as a mechanical one, and §2.3's finding (the sun is worth little on
-   long routes) means the wrong threshold makes counsel chatter uselessly on exactly the
-   flights players care most about.
+7. **Counsel's speaking threshold** → **F38.** `max(30 min, 5% of the send-now ETA)`, and
+   never propose waiting longer than the saving.
 
-8. **The boot-guard hole (§6.3).** `mechanics_config` is live but F19's guard runs only at
-   boot, so a mid-flight flag flip enables a mechanic against an unchecked heuristic. This
-   pre-exists v2 but v2 makes it reachable. Restart-required, or re-guard on reload?
+8. **The boot-guard hole** → **F39.** Guard adoption rather than boot; last-good-config
+   semantics; the week-2 flip is one SQL transaction.
 
-9. **Waiting at towers (§4.5) — confirm the deferral.** Named and not specified here, on
-   the grounds that it is a time-expanded-graph problem touching the router's core data
-   structure, `segment_etas`, the replan contract, and the visual language for "stationary
-   but not stranded". Confirm v2.1, and whether it should be designed before or after v2.0
-   beta data arrives.
+9. **Waiting at towers** → **F40.** v2.1 confirmed, designed *after* beta data measures the
+   real size of the FIFO gap.
 
-10. **Is "not provably optimal" acceptable to state publicly?** §4.4 proposes the product
-    never claim "fastest route". If any existing or planned copy does claim it, that copy
-    changes with this milestone — and the FAQ may want an honest sentence about it, in the
-    same spirit as the existing "the sky decides" framing.
+10. **Is "not provably optimal" public?** → **F41.** Yes. *"The sky does not certify
+    shortest paths."*
 
----
+**F42 — counsel was comparing two different weathers.** Raised against the draft: pricing
+"now" from `weather_cells` and later candidates from `forecast_hours` measures the
+products, not the sky. All candidates now read `forecast_hours`. §5.3.
 
-## 9. What this document does not do
+**F43 — two omissions.** `forecast_hours` had no janitor (§5.3), and §7.3's
+replan-correction assertion is only true under constant fixture weather (§7.3).
 
-No implementation exists. No `mechanics_config` rows have been added. No migration has
-been written. No code in `packages/shared`, `services/engine` or `apps/mobile` has been
-modified for any mechanic described here.
+## 9. Provenance of the numbers
 
-The numbers in §2.3, §2.4 and §4.2 were computed against the real committed grid, the real
-land mask and the real cell geometry, using a throwaway analysis script that was not added
-to the repository. They are reproducible and they are not estimates — but they are
-*proposals about a model*, and the model is what the red-team is for.
+The figures in §2.3, §2.4 and §4.2 were computed against the real committed grid, the real
+land mask and the real cell geometry — not estimated. The Newark→Denver route really is 60
+cells, really does cross the terminator six times, and the FIFO violation in §4.2 was found
+by sweeping departure times at ten-minute resolution rather than by argument.
+
+They remain *claims about a model*. The model is now ruled (REDTEAM F32–F43) and
+implemented behind flags that default off, which means the beta — not this document — gets
+the last word on whether 0.75 is the right number.

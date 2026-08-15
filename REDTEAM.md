@@ -167,3 +167,66 @@ alongside the ones they constrain.
 No unresolved severe findings. F1 and F5 were the two that would have materially hurt launch; both are now v1 scope. Design is cleared for Phase 3 (implementation).
 
 F28–F31 were found by running v1 on a physical device against the live NWS API — a class of failure no test in the suite could reach, because every test ran against a warm or simulated cache. F29 is the one worth remembering: a value written to satisfy one rule (never strand) had quietly acquired a second, unruled meaning (prefer the unexplored), and an expensive mechanism had been built to compensate for a bug nobody had named.
+
+---
+
+# Addendum — V2 architect red-team (rulings F32–F43)
+
+Rulings on MECHANICS-V2.md, the day/night draft. F32–F41 answer the ten questions the
+draft raised; F42 and F43 are findings the red-team made against the draft itself.
+
+## F32 — The sun's theater and the sun's physics ship together (Q1)
+**Attack:** The V2 brief assumed an M5.5 cosmetic day/night layer already existed to share the sun computation with. None was ever implemented — it was proposed in an input list, never built and never ruled — so there was no shared definition, and two independent implementations were about to be written weeks apart.
+**Resolution:** Shared module and visual layer ship **together, in one milestone**, `packages/shared/src/geo/sun.ts` first and both consumers after it. A separate flag `night.visuals_enabled` (default **true**) lets the map show fire-at-night from day one: theater is always honest about what the sky looks like. But **no copy anywhere may claim speed** — "travels faster as fire" and its cousins — unless `night.enabled` is true. The shared-definition test asserts the engine and the client agree on day/night state *regardless of the mechanics flags*.
+
+## F33 — Wind and the two axes (Q2)
+**Attack:** The draft ruled that wind cannot garble a beacon because "a signal's shape can be shredded, its presence cannot" — then left `wind_mult` fully active at night, which by that reasoning looks inconsistent. Either wind reaches a fire or it does not.
+**Resolution:** **Wind stays fully active on time at night**, and the stated reason is amended, because the apparent inconsistency was a category error in the draft's own wording. There are two axes, not one. **Integrity is information**: garbling destroys the *shape* that carries meaning, and a fire's meaning is its presence, so darkness is immunity. **Speed is operations**: `wind_mult` was never information — it is the drag of keeping a fire lit, fed and sightable, and a crew fighting a gale is a slower crew whatever they are burning. Amend MECHANICS-V2 §3.1 with the two-axis language. Approved night-gale flavour: *"The fire bends in the wind, but holds."*
+
+## F34 — Never-fetched cells keep the night bonus (Q3)
+**Attack:** Should a cell we have never looked at receive the night speed-up?
+**Resolution:** **Yes**, as drafted. Under F29 an unfetched cell prices like overcast, and overcast is not blinding, so consistency demands the bonus. Denying it would make unexplored terrain *doubly* expensive after dark — reintroducing precisely the routing bias F29 removed, with the sign flipped. The §3.3 table stands.
+
+## F35 — Snow stays in the blinding set, whole (Q4)
+**Attack:** Heavy snow certainly blinds; flurries arguably do not. The proposed set does not distinguish them.
+**Resolution:** **Snow stays, undivided.** NWS condition text does not reliably separate light snow from heavy, and a list an operator can explain beats a distinction the data cannot support. Marked **TUNE** with an explicit revisit condition: if beta logs show snow-blinding firing on flurries in a way testers notice, revisit against actual NWS strings rather than against intuition.
+
+## F36 — Transmission time is unchanged at night (Q5)
+**Attack:** Does working a fire shutter take a different time from puffing smoke?
+**Resolution:** **Unchanged. No new key.** The difference is below the resolution of a model that charges 3 s per four characters. One flavour line is permitted at a night-time origin — *"The fire speaks in flashes"* — carrying zero mechanics.
+
+## F37 — Counsel means dusk at the origin (Q6)
+**Attack:** "Send at dusk" — whose dusk? The sender's, or the route's first dark cell?
+**Resolution:** **The origin's.** The sender's own sky, the one out their window. The route-relative answer is mechanically purer and completely invisible to the person being advised; intuition wins where the two conflict. Counsel copy says *"at dusk"*, never a clock time — the same philosophy as F30's bands.
+
+## F38 — Counsel speaks only when it is worth hearing (Q7)
+**Attack:** The draft left the speaking threshold unset, and §2.3 showed the sun is worth little on long routes — so a naive threshold would make counsel chatter uselessly on exactly the flights players care most about.
+**Resolution:** Counsel speaks only when the best candidate beats sending now by at least **max(30 minutes, 5% of the send-now ETA)** — `counsel.min_abs_minutes` = 30 and `counsel.min_fraction` = 0.05, both TUNE. Additionally, **counsel never proposes waiting longer than the time it saves**. Together with §2.3's finding this makes counsel confident on short routes and silent on long ones *by construction*, rather than by a tuned guess.
+
+## F39 — Guard the adoption, not the boot (Q8)
+**Attack:** F19's admissibility guard runs at boot, but `mechanics_config` is a live table. Flipping `night.enabled` while the engine runs enables the mechanic against an unchecked heuristic — the silent degradation F19 exists to convert into a loud failure.
+**Resolution:** **Re-guard on adoption, with last-good-config semantics.** Restart-required is rejected: "restart to change config" defeats the purpose of a config table. The engine validates **every** config snapshot it loads, at boot and on reload identically. An invalid snapshot is **not adopted** — the engine keeps the last good config, logs loudly, and fires the dead-man alert channel. Note the operator reality that makes this the only correct design: config writes are raw SQL, so the engine cannot refuse the *write*, only the *adoption*. Consequence for §6.2: an "atomic flip" means the guard evaluates the post-transaction snapshot **as a set**, so the week-2 flip is one SQL transaction touching all three keys. Document that as the operator procedure.
+
+## F40 — Waiting at towers is designed after beta data (Q9)
+**Attack:** Should the v2.1 time-expanded-graph work begin now?
+**Resolution:** **v2.1 confirmed, and designed after v2.0 beta data.** The beta measures the empirical size of the FIFO gap — how often replans correct a frozen plan, and by how much. Designing a time-expanded graph before knowing whether the prize is thirteen minutes or three hours is speculation with a data source already scheduled.
+
+## F41 — "Not provably optimal" is public posture (Q10)
+**Attack:** May the product state that its routes are not provably shortest?
+**Resolution:** **Approved as public posture.** No copy may claim "fastest"; the approved words are *"the route"* and *"the way the sky is open"*. One FAQ sentence, in the Ledger voice: *"The sky does not certify shortest paths."* Separately noted for LAUNCH.md: the §4.2 departure sweep — leave ten minutes later, arrive thirteen minutes earlier — is launch-thread material.
+
+## F42 — Counsel was comparing two different weathers (MEDIUM, correctness)
+**Attack:** As drafted, counsel prices the "now" candidate from `weather_cells` (current conditions) and every later candidate from `forecast_hours`. Those are different products with different biases, so the comparison is apples to oranges: if the hourly forecast runs systematically milder than current-condition readings — which is a normal property of forecast smoothing — counsel would recommend waiting for reasons that are entirely an artefact of which table was read.
+**Resolution:** When counsel evaluates, **every candidate including "now" prices from `forecast_hours`**, using the hour-0 row. `weather_cells` remains the router's authority for actual sends and replans. One comparison, one source. A comparison between two products measures the products.
+
+## F43 — Two omissions in the draft (LOW, completeness)
+**Attack:** (a) `forecast_hours` had no janitor: rows accumulate at horizon × warmed cells and nothing ever deletes an expired `valid_hour`. (b) §7.3's replan-correction assertion — "arrival no later than the frozen plan predicted" — is false whenever the weather legitimately worsens mid-flight, which is a thing that happens to real messages.
+**Resolution:** (a) Expired rows are deleted by the existing dissipation-cadence cron family, and the document states the growth bound: horizon × warmed cells, never the whole grid. (b) The replan-correction obligation holds **only under fixture weather held constant**. State the fixture condition in the test, or the assertion fails for honest reasons and the suite teaches everyone to distrust it.
+
+---
+
+## Verdict — V2 design
+
+Cleared for implementation as amended. F42 is the one that would have shipped: a counsel
+feature whose advice was an artefact of table choice would have been very hard to catch
+from the outside, because the advice would have looked plausible every time.
