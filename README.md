@@ -10,6 +10,7 @@ The design documents are the source of truth, in this order of authority:
 | [MECHANICS.md](MECHANICS.md) | **Every gameplay number** |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Stack, data model, services, milestones |
 | [REDTEAM.md](REDTEAM.md) | Decisions already litigated — do not re-open |
+| [DESIGN.md](DESIGN.md) | The design system, and which visual decisions are closed |
 
 **Current milestone: M4 — Client shell (complete).** M1 built the monorepo, cell math,
 schema and config seeding; M2 the weather cache and A* router; M3 the message lifecycle;

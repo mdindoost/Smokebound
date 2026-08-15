@@ -24,7 +24,10 @@ Your message travels across a live map as a smoke signal, routed around real sto
 ## 3. Feature cut list (non-negotiable boundaries)
 
 ### v1 (launch)
-- Phone/Apple auth
+- **Phone auth (OTP) only.** Apple sign-in is cut from v1: it costs an entitlement, a paid
+  account and a review surface, and it buys nothing while phone OTP is the only way in
+  anyway (Apple requires "Sign in with Apple" only where *other* social logins are offered).
+  Revisit when there is a second sign-in method to justify it.
 - **Flock**: add friends by handle or invite link (friend request arrives as a drifting smoke wisp)
 - **Compose & send**: text only, 280-char hard cap (see MECHANICS §5 for why)
 - **Weather-routed delivery**: grid A* over live weather costs; route committed at send, replan-on-block (MECHANICS §4)

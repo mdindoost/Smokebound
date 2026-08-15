@@ -111,5 +111,41 @@ Findings raised while implementing M1, ruled on and patched into the docs.
 
 ---
 
+# Addendum — M4 architect review (rulings)
+
+## F24 — Apple sign-in is out of v1 scope (LOW, scope)
+**Attack:** SPEC §3 listed "Phone/Apple auth", but Apple sign-in needs an entitlement, a paid developer account and its own review surface — and Apple only *requires* it where other social logins are offered, which SMOKE does not offer. Half-building it costs M6 time for nothing.
+**Resolution:** **Phone OTP only in v1.** Apple sign-in is cut from scope and revisited if a second sign-in method ever justifies it. (SPEC §3 patched.)
+
+## F25 — The storage bound had no headroom (LOW, correctness)
+**Attack:** The 2,000-code-point sanity bound left 40 characters of margin over a legal 280-family-emoji message (1,960 code points). A body of 280 heavily-combined clusters would be refused despite obeying the cap.
+**Resolution:** Bound raised to **4,000** by migration. Still a guard against absurd payloads, now with room for any legal message. The gameplay cap remains 280 grapheme clusters in `mechanics_config`. (MECHANICS §5, ARCHITECTURE §3 patched.)
+
+## F26 — Relays will break the heuristic on the day they ship (MEDIUM, correctness)
+**Attack:** The v1.1 Tower model gives human "signal hills" `relay.tend_mult` = 0.1, which drops the smallest achievable time multiplier from 0.7 to 0.07. The boot guard (F19) would refuse to start — correctly — but only *after* the relay mechanic was written, at the worst possible moment.
+**Resolution:** Stated as a rule now: `routing.heuristic_max_speed_factor` must equal the product of every multiplier floor the router can apply, and the factor change ships **in the same release** as the relay mechanic. (ARCHITECTURE §6.2 patched.)
+
+## F27 — One cron pass makes one transition (LOW, documentation)
+**Attack:** delivery-check reads a batch and then mutates it, so a message promoted to IN_FLIGHT in a pass is never also advanced or delivered in that pass. Invisible at a one-minute cadence, confusing in a time-travelling test, and exactly the kind of thing a future contributor "fixes" into a re-entrancy bug.
+**Resolution:** Documented as intended: one pass, one transition, reasoning about a stable snapshot. Tests tick twice per step. (ARCHITECTURE §6.3 patched.)
+
+---
+
+# Addendum — visual identity rulings (V1–V4)
+
+Recorded in full in [DESIGN.md](DESIGN.md); listed here so the design decisions live
+alongside the ones they constrain.
+
+- **V1 — Sky-panel model.** The map is a dark panel inset in a parchment app, not a dark
+  theme. Deep-sky tokens are a sub-palette; the chrome stays parchment.
+- **V2 — Contained weather family.** Radar keeps its own hues but enters the system
+  desaturated and under a fixed opacity ceiling, so weather never out-shouts ember.
+- **V3 — Bundled serif.** One serif ships with the app rather than borrowing a platform
+  face, so screenshots are identical everywhere.
+- **V4 — Elegiac state semantics.** Sheltering is calm storm-grey, lost is ash. Drama
+  comes from the map and the copy, never from an alarm colour.
+
+---
+
 ## Verdict
 No unresolved severe findings. F1 and F5 were the two that would have materially hurt launch; both are now v1 scope. Design is cleared for Phase 3 (implementation).

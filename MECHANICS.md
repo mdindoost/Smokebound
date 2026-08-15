@@ -116,9 +116,10 @@ not by weather:
   the counter in the compose screen shows. 280 emoji is a legal message; so is 280
   Devanagari syllables. The engine is the authoritative gate: it counts clusters and
   refuses at 281.
-- The database stores a **2,000-character sanity bound** rather than 280, because
+- The database stores a **4,000-character sanity bound** rather than 280, because
   Postgres counts code points and a legal 280-cluster message can be several times
-  longer in those units. That bound is a guard against absurd payloads, not a
+  longer in those units — 280 family emoji are 1,960, and a heavily-combined script can
+  go further. The bound is a guard against absurd payloads with room to spare, not a
   gameplay rule; the gameplay rule lives in `mechanics_config.message.char_cap`.
 
 ## 6. Failure & drama states

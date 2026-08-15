@@ -82,7 +82,7 @@ create table messages (
   id uuid primary key default gen_random_uuid(),
   sender uuid references profiles(id),
   recipient uuid references profiles(id),
-  body text not null check (char_length(body) <= 2000),  -- sanity bound, not the cap;
+  body text not null check (char_length(body) <= 4000),  -- sanity bound, not the cap;
                                          -- the 280-GRAPHEME cap is enforced by the engine
                                          -- (MECHANICS §5, REDTEAM F20)
   body_delivered text,                   -- post-garble text; null until delivered
@@ -169,7 +169,8 @@ grace (MECHANICS §6.1) starts when it strands, wherever it stranded.
 ### 6.2 Router
 - A* over the 8-connected grid.
 - **Edge cost (hours) = `(cell_km / speed.base_kmh) × weather_mult × wind_mult`**, where `cell_km` is the hop length (diagonal = ×1.414). Every multiplier acts on **time**: higher = slower (MECHANICS §2, §2.1, §2.2). The older "`cell_km / (base × mult)`" phrasing was inverted — under it a thunderstorm made smoke 6× faster — and is retired.
-- **Heuristic = `great_circle_km × 0.7 / speed.base_kmh`** — the distance flown at the fastest the sky ever allows (full tailwind, `wind_mult` floor 0.7). Admissible: no path can beat 0.7× time over a distance no shorter than the great circle. (Note for v1.1: `relay_mult` = 0.1 would lower the floor and the heuristic factor must drop with it.)
+- **Heuristic = `great_circle_km × 0.7 / speed.base_kmh`** — the distance flown at the fastest the sky ever allows (full tailwind, `wind_mult` floor 0.7). Admissible: no path can beat 0.7× time over a distance no shorter than the great circle.
+- **v1.1 rule (binding when relays ship):** `routing.heuristic_max_speed_factor` must equal the *product of every multiplier floor the router can apply*. With the Tower model that is `wind.tailwind_min_mult × relay.tend_mult` = 0.7 × 0.1 = **0.07**. Ship the factor change in the same release as the relay mechanic, not after — the startup guard (§6.2 below) will refuse to boot otherwise, which is the intended failure: a tuned-open heuristic degrades routes silently, a refused boot does not.
 - **Traversability:** a cell is pruned if it is impassable (active severe alert) or non-traversable (open ocean or foreign land, MECHANICS §1.1). Never costed, never entered.
 - **Startup guard:** the engine asserts on boot that `routing.heuristic_max_speed_factor` is ≤ the smallest time multiplier the config can produce (today `wind.tailwind_min_mult` × the minimum weather multiplier). If a tuning edit ever makes the heuristic optimistic, A* stops being optimal *silently* — so this is a boot failure, not a warning. When v1.1 relays ship, `relay_mult` enters the same computation.
 - Returns `{route, segment_etas, total_hours}` or `NO_ROUTE`.
@@ -179,6 +180,7 @@ grace (MECHANICS §6.1) starts when it strands, wherever it stranded.
 - **send pipeline** (on insert via Supabase webhook or poll): reject if either party blocks the other; compute route, set TRANSMITTING with `departed_at = now + transmission_time`.
 - **The Keeper** (F5): system profile, `home_cell` computed as adjacent to each new user at onboarding (per-user virtual position). First-run flow prompts a message to The Keeper; engine auto-replies with rotating era-flavored lines ~30 min after delivery. Plain data + one cron branch — no LLM, no cost.
 - **delivery-check (1 min):** promote TRANSMITTING→IN_FLIGHT when departed; advance `current_leg` past due waypoints; on gale-cell traversal roll garble (record event); on final eta → DELIVERED, apply garbles to produce `body_delivered`, push.
+  - **One transition per pass.** A message promoted to IN_FLIGHT in a pass is not also advanced or delivered in that pass — the batch was read before it changed state. At a one-minute cadence this is invisible in production; it matters only to time-travelling tests, which must therefore tick twice per step. Do not "optimise" it by re-reading inside the loop: one pass, one transition, is what keeps the cron reasoning about a stable snapshot.
 - **replan (15 min):** for IN_FLIGHT, check next cell impassable → STRANDED (+push). For STRANDED, attempt reroute from `stranded_cell`; success → IN_FLIGHT (+push "skies cleared").
 - **dissipation (1 h):** STRANDED > 24 h **and stranded away from its origin** → roll per MECHANICS §6.1 → LOST (+push, loss screen payload). Origin-stranded messages are skipped: a tended fire never dies.
 
