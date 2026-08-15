@@ -85,6 +85,12 @@ class ScriptedNws implements NwsClient {
     );
   }
 
+  async getHourlyForecast(): Promise<null> {
+    // The mobile world exercises the client, not counsel; nothing here reads
+    // hourly forecasts.
+    return null;
+  }
+
   async getActiveAlerts(): Promise<NwsAlert[]> {
     return this.alerts;
   }

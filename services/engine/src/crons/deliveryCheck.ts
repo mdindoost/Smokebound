@@ -12,6 +12,7 @@
  * server truth and this cron simply reads the clock against them.
  */
 
+import { cellCenter, isNight } from '@smoke/shared';
 import type { CellId, Message, SegmentEta } from '@smoke/shared';
 
 import type { EngineContext } from '../engine/context.js';
@@ -103,13 +104,15 @@ async function advanceInFlight(
   if (segments.length === 0) return;
 
   let leg = message.current_leg;
-  const traversed: CellId[] = [];
+  const traversed: { cell: CellId; enteredAt: Date }[] = [];
 
   while (leg + 1 < segments.length) {
     const next = segments[leg + 1]!;
     if (new Date(next.eta).getTime() > now.getTime()) break;
     leg++;
-    traversed.push(next.cell);
+    // Carry the entry instant, not just the cell: whether a gale could shred
+    // this hop depends on whether it was flown in daylight (MECHANICS-V2 §3.1).
+    traversed.push({ cell: next.cell, enteredAt: new Date(next.eta) });
   }
 
   const garbleEvents: GarbleEventRow[] = Array.isArray(message.garble_events)
@@ -164,18 +167,28 @@ async function advanceInFlight(
 async function rollGarbles(
   ctx: EngineContext,
   message: Message,
-  traversed: readonly CellId[],
+  traversed: readonly { cell: CellId; enteredAt: Date }[],
   now: Date,
   garbleEvents: GarbleEventRow[],
 ): Promise<number> {
-  const weather = await ctx.weather.getCellWeather(traversed);
+  const weather = await ctx.weather.getCellWeather(traversed.map((hop) => hop.cell));
   const galeThreshold = ctx.config.get('wind.gale_threshold_mph');
   const chance = ctx.config.get('garble.gale_chance');
+  const daylightOnly = ctx.config.get('garble.daylight_only');
+  const twilightDeg = ctx.config.get('night.twilight_elevation_deg');
   let hits = 0;
 
-  for (const cell of traversed) {
+  for (const { cell, enteredAt } of traversed) {
     const entry = weather.get(cell);
     if (!entry || entry.windMph <= galeThreshold) continue;
+
+    // Integrity is information (MECHANICS-V2 §3.1.1, REDTEAM F33). Garbling
+    // destroys the *shape* that carries the meaning, and after dark the tower is
+    // burning a fire — a stationary point of light, whose meaning is its
+    // presence. There is no shape for the wind to tear. Speed is the other axis
+    // entirely: wind_mult still slows the hop, because keeping a fire lit and
+    // sightable in a gale is slow work whatever you are burning.
+    if (daylightOnly && isNight(enteredAt, cellCenter(cell), twilightDeg)) continue;
 
     // Seeded per (message, cell) so the same gale always rolls the same way.
     const rng = seededRng(`${message.id}:gale:${cell}`);

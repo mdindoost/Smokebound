@@ -250,8 +250,14 @@ export async function previewMessage(
   const parties = await validateParties(ctx, request.senderId, request.recipientId, request.body);
   const now = ctx.clock.now();
 
+  // Transmission time is a pure function of the message, so we know when the
+  // smoke leaves before we know where it goes — which is what lets the route be
+  // priced by the sun it will actually meet (MECHANICS-V2 §2.2).
+  const departsAt = new Date(now.getTime() + transmissionSeconds(request.body, ctx.config) * 1000);
+
   const journey = await planJourney(ctx, parties.senderHome, parties.recipientHome, {
     resolveUnknowns: true,
+    departAt: departsAt,
   });
 
   const totalHours = journey.result.status === 'OK' ? journey.result.totalHours : null;
@@ -337,8 +343,10 @@ export async function sendMessage(ctx: EngineContext, request: SendRequest): Pro
 
   // Always recompute: the token is a record of what the user was told, never a
   // cached route to reuse.
+  const departsAt = new Date(now.getTime() + transmissionSeconds(request.body, ctx.config) * 1000);
   const journey = await planJourney(ctx, parties.senderHome, parties.recipientHome, {
     resolveUnknowns: true,
+    departAt: departsAt,
   });
   const totalHours = journey.result.status === 'OK' ? journey.result.totalHours : null;
   const plan = schedule(ctx, now, request.body, {

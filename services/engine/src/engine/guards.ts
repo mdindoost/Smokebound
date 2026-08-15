@@ -20,9 +20,21 @@ export class ConfigInvariantError extends Error {
 /**
  * The smallest time multiplier the config can produce for a single hop.
  *
- * Today that is the best weather times the tailwind floor. When v1.1 relays ship
- * (`relay.mult`, `relay.tend_mult`), they multiply the same product and must be
- * included here — and the heuristic factor must come down with them.
+ * Every mechanic that can make a hop cheaper multiplies into this product, and
+ * `routing.heuristic_max_speed_factor` must never exceed it — that is the whole
+ * of REDTEAM F3 and F19. Today the terms are:
+ *
+ *   - the best weather in the table, and the fail-open/unknown multipliers;
+ *   - the tailwind floor (`wind.tailwind_min_mult`);
+ *   - **the night multiplier, when `night.enabled` is true** (MECHANICS-V2 §4.6).
+ *
+ * The night term is gated on its flag, not merely on its value, so the guard
+ * answers the question an operator actually asks: *is this config safe as it
+ * stands?* With night off, 0.7 is correct and 0.525 is merely pessimistic —
+ * admissible, slightly slower to search. With night on, 0.7 is silently wrong.
+ *
+ * When v1.1 relays ship (`relay.mult`, `relay.tend_mult`) they join the same
+ * product: 0.7 × 0.1 × 0.75 = 0.0525.
  */
 export function minimumAchievableTimeMultiplier(config: MechanicsConfig): number {
   const table = config.get('weather.time_mult');
@@ -34,7 +46,8 @@ export function minimumAchievableTimeMultiplier(config: MechanicsConfig): number
     config.get('routing.unknown_cost_mult'),
     ...Object.values(table),
   );
-  return weatherMin * config.get('wind.tailwind_min_mult');
+  const nightMin = config.get('night.enabled') ? config.get('night.time_mult') : 1;
+  return weatherMin * config.get('wind.tailwind_min_mult') * nightMin;
 }
 
 /**

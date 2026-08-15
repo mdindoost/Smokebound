@@ -8,7 +8,7 @@
  * multipliers in the first place.
  */
 
-import { alongTrackWind, cellCenter, haversineKm, initialBearingDeg } from '@smoke/shared';
+import { alongTrackWind, cellCenter, haversineKm, initialBearingDeg, isNight } from '@smoke/shared';
 import type { CellId, MechanicsConfig } from '@smoke/shared';
 
 import type { WeatherSnapshot } from '../weather/types.js';
@@ -90,19 +90,63 @@ export function cellMultipliers(
 }
 
 /**
+ * The night multiplier for entering `cell` at `entryAt` (MECHANICS-V2 §2, §3).
+ *
+ * A fire carries further than a smoke column, so after dark the relay chain
+ * sees the next station sooner and word moves faster. Three things can take the
+ * bonus away, and only three:
+ *
+ *  - the mechanic is switched off (`night.enabled`, default false);
+ *  - it is not actually night in *this cell* at the moment of entry — the
+ *    terminator is a line across the map, not a global clock;
+ *  - the air is blinding (fog, snow, heavy rain, thunderstorm), because a fire
+ *    nobody can see is worth nothing however brightly it burns.
+ *
+ * A never-fetched cell **keeps** the bonus (REDTEAM F34). It prices like
+ * overcast under F29, and overcast is not blinding; denying it would make the
+ * unexplored doubly expensive after dark, which is F29's own bias with the sign
+ * flipped.
+ */
+export function nightMultiplier(
+  cell: CellId,
+  entryAt: Date | null | undefined,
+  weather: WeatherSnapshot,
+  config: MechanicsConfig,
+): number {
+  if (entryAt === null || entryAt === undefined) return 1;
+  if (!config.get('night.enabled')) return 1;
+  if (!isNight(entryAt, cellCenter(cell), config.get('night.twilight_elevation_deg'))) return 1;
+
+  const entry = weather.get(cell);
+  if (entry !== undefined) {
+    const blinding = config.get('night.blinding_conditions');
+    if (blinding.includes(entry.condition as (typeof blinding)[number])) return 1;
+  }
+  return config.get('night.time_mult');
+}
+
+/**
  * Hours to move from one cell into an adjacent one. The weather that counts is
  * the weather of the cell being *entered* — that is the air the smoke has to get
- * through on this hop.
+ * through on this hop — and so is the sun.
+ *
+ * `entryAt` is when the smoke arrives at `to`. Omit it and the hop is priced as
+ * daylight, which is exactly v1 behaviour; that is what makes the whole night
+ * mechanic reduce to nothing when its flag is off.
  */
 export function hopHours(
   from: CellId,
   to: CellId,
   weather: WeatherSnapshot,
   config: MechanicsConfig,
+  entryAt?: Date | null,
 ): number {
   const bearing = initialBearingDeg(cellCenter(from), cellCenter(to));
   const { weatherMult, windMult } = cellMultipliers(to, bearing, weather, config);
-  return (hopDistanceKm(from, to) / config.get('speed.base_kmh')) * weatherMult * windMult;
+  const nightMult = nightMultiplier(to, entryAt, weather, config);
+  return (
+    (hopDistanceKm(from, to) / config.get('speed.base_kmh')) * weatherMult * windMult * nightMult
+  );
 }
 
 /**

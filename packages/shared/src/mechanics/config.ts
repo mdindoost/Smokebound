@@ -65,6 +65,19 @@ const isTimeMultTable: Validator = (v) => {
   return missing.length ? `missing/invalid conditions: ${missing.join(', ')}` : null;
 };
 
+const isConditionList: Validator = (v) => {
+  if (!Array.isArray(v)) return 'expected an array of weather conditions';
+  const unknown = v.filter((c) => !WEATHER_CONDITIONS.includes(c as WeatherCondition));
+  return unknown.length ? `not weather conditions: ${unknown.join(', ')}` : null;
+};
+
+const isNumberList: Validator = (v) => {
+  if (!Array.isArray(v)) return 'expected an array of numbers';
+  return v.every((n) => typeof n === 'number' && Number.isFinite(n))
+    ? null
+    : 'expected every entry to be a finite number';
+};
+
 /** Type-shape validators, one per key. Types only — never values. */
 const VALIDATORS: Record<MechanicsKey, Validator> = {
   'grid.cell_km': isFiniteNumber,
@@ -89,6 +102,24 @@ const VALIDATORS: Record<MechanicsKey, Validator> = {
   'message.char_cap': isFiniteNumber,
   'routing.unknown_cost_mult': isFiniteNumber,
   'preview.resolve_budget_seconds': isFiniteNumber,
+  // --- MECHANICS-V2 §2, §3 · the sun (REDTEAM F32–F36) --------------------
+  'night.enabled': isBoolean,
+  'night.visuals_enabled': isBoolean,
+  'night.time_mult': isFiniteNumber,
+  'night.twilight_elevation_deg': isFiniteNumber,
+  'night.blinding_conditions': isConditionList,
+  'garble.daylight_only': isBoolean,
+
+  // --- MECHANICS-V2 §5 · counsel (REDTEAM F37, F38, F42) ------------------
+  'counsel.enabled': isBoolean,
+  'counsel.candidate_offsets_hours': isNumberList,
+  'counsel.include_dusk_dawn': isBoolean,
+  'counsel.min_forecast_coverage': isFiniteNumber,
+  'counsel.min_abs_minutes': isFiniteNumber,
+  'counsel.min_fraction': isFiniteNumber,
+  'forecast.cache_ttl_minutes': isFiniteNumber,
+  'forecast.horizon_hours': isFiniteNumber,
+
   'preview.band_base_spread': isFiniteNumber,
   'preview.band_unknown_spread': isFiniteNumber,
   'preview.band_length_spread': isFiniteNumber,

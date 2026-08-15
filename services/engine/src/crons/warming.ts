@@ -29,6 +29,7 @@ import { cellsAlongGreatCircle, cellsInBoundingBox, expandWithPadding } from '@s
 import type { CellId } from '@smoke/shared';
 
 import type { EngineContext } from '../engine/context.js';
+import type { ForecastStore } from '../weather/forecast.js';
 import { messagesInStates } from '../db/repo.js';
 
 export interface WarmingStats {
@@ -40,6 +41,10 @@ export interface WarmingStats {
   skipped: number;
   activeRoutes: number;
   activeFires: number;
+  /** Hourly forecast rows written for counsel (MECHANICS-V2 §5.4). */
+  forecastHours: number;
+  /** Expired forecast rows deleted (REDTEAM F43a). */
+  forecastSwept: number;
 }
 
 /** Priority 1: where smoke is right now, plus a cell of shoulder. */
@@ -85,7 +90,10 @@ async function livePlaces(ctx: EngineContext): Promise<{ cells: CellId[]; fires:
   return { cells, fires: fires.length };
 }
 
-export async function runWarming(ctx: EngineContext): Promise<WarmingStats> {
+export async function runWarming(
+  ctx: EngineContext,
+  forecasts?: ForecastStore,
+): Promise<WarmingStats> {
   const budget = ctx.config.get('warming.cells_per_pass');
 
   const flights = await inFlightCorridors(ctx);
@@ -108,11 +116,24 @@ export async function runWarming(ctx: EngineContext): Promise<WarmingStats> {
     );
   }
 
+  // Counsel's hourly data is priority three, behind everything above, and it
+  // rides the same budget: only cells we were already warming can be worth
+  // forecasting, because those are the corridors people actually use (F31).
+  let forecastHours = 0;
+  let forecastSwept = 0;
+  if (forecasts !== undefined && ctx.config.get('counsel.enabled')) {
+    forecastSwept = await forecasts.sweepExpired();
+    const stale = await forecasts.staleCells(warm);
+    if (stale.length > 0) forecastHours = await forecasts.warm(stale);
+  }
+
   return {
     wanted: wanted.length,
     warmed: warm.length,
     skipped,
     activeRoutes: flights.routes,
     activeFires: places.fires,
+    forecastHours,
+    forecastSwept,
   };
 }

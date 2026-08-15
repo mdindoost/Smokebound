@@ -47,9 +47,26 @@ export interface NwsAlert {
   geometry?: AlertGeometry | null;
 }
 
+export interface NwsHourlyPeriod {
+  /** Start of the hour this period describes. */
+  startTime: string;
+  shortForecast: string;
+  windSpeed: string;
+  windDirection: string;
+}
+
 export interface NwsClient {
   /** Current-period forecast for a point, or null where NWS has no coverage. */
   getForecast(point: LatLng): Promise<NwsForecast | null>;
+  /**
+   * Hourly forecast periods for a point (MECHANICS-V2 §5.3), or null where NWS
+   * has no coverage.
+   *
+   * Reached through the `forecastHourly` link on the same `/points` response the
+   * current forecast already uses — so counsel adds **no new `/points` traffic
+   * at all**, only a different second hop against an already-memoised lookup.
+   */
+  getHourlyForecast(point: LatLng): Promise<NwsHourlyPeriod[] | null>;
   /**
    * Every active alert in the launch region, in one request (REDTEAM F19).
    * Fetching per cell multiplied request volume by corridor length for no extra
@@ -112,7 +129,10 @@ export class HttpNwsClient implements NwsClient {
   private readonly fetchImpl: typeof fetch;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
-  private readonly forecastUrls = new Map<string, string | null>();
+  private readonly forecastUrls = new Map<
+    string,
+    { forecast: string | null; hourly: string | null } | null
+  >();
 
   constructor(private readonly options: HttpNwsClientOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -148,17 +168,51 @@ export class HttpNwsClient implements NwsClient {
     );
   }
 
+  async getHourlyForecast(point: LatLng): Promise<NwsHourlyPeriod[] | null> {
+    const urls = await this.resolvePointUrls(point);
+    if (urls?.hourly == null) return null;
+
+    const body = (await this.getJson(urls.hourly)) as {
+      properties?: { periods?: NwsHourlyPeriod[] };
+    } | null;
+    const periods = body?.properties?.periods;
+    if (!Array.isArray(periods)) return null;
+
+    return periods.map((period) => ({
+      startTime: period.startTime ?? '',
+      shortForecast: period.shortForecast ?? '',
+      windSpeed: period.windSpeed ?? '',
+      windDirection: period.windDirection ?? '',
+    }));
+  }
+
   private async resolveForecastUrl(point: LatLng): Promise<string | null> {
+    return (await this.resolvePointUrls(point))?.forecast ?? null;
+  }
+
+  /**
+   * The `/points` lookup, memoised, carrying **both** forecast URLs.
+   *
+   * One lookup serves the current forecast and the hourly one, which is why
+   * counsel costs no new `/points` traffic (MECHANICS-V2 §5.3) — it follows a
+   * different second hop off a response we already had.
+   */
+  private async resolvePointUrls(
+    point: LatLng,
+  ): Promise<{ forecast: string | null; hourly: string | null } | null> {
     const key = `${point.lat.toFixed(4)},${point.lng.toFixed(4)}`;
     const cached = this.forecastUrls.get(key);
     if (cached !== undefined) return cached;
 
     const body = (await this.getJson(`${this.baseUrl}/points/${key}`)) as {
-      properties?: { forecast?: string };
+      properties?: { forecast?: string; forecastHourly?: string };
     } | null;
-    const url = body?.properties?.forecast ?? null;
-    this.forecastUrls.set(key, url);
-    return url;
+    const urls = {
+      forecast: body?.properties?.forecast ?? null,
+      hourly: body?.properties?.forecastHourly ?? null,
+    };
+    this.forecastUrls.set(key, urls);
+    return urls;
   }
 
   /** Returns null for 404 (no coverage); throws NwsUnavailableError otherwise. */

@@ -36,8 +36,9 @@ import { arrivalLabel, stateBlurb, stateLabel } from '../../src/lib/copy';
 import { formatDistance, formatEta, formatSince } from '../../src/lib/format';
 import { confirmedCells, flightAt, regionFor } from '../../src/lib/flight';
 import { windReading } from '../../src/lib/wind';
+import { regimeAt, regimeLine } from '../../src/map/NightLayer';
 import { useSession } from '../../src/lib/session';
-import type { CellWeatherView, ThreadMessageView } from '../../src/lib/gateway';
+import type { CellWeatherView, MechanicsView, ThreadMessageView } from '../../src/lib/gateway';
 
 const TICK_MS = 2_000;
 
@@ -48,6 +49,7 @@ export default function Flight() {
   const [message, setMessage] = useState<ThreadMessageView | null>(null);
   const [weather, setWeather] = useState<Map<string, CellWeatherView>>(new Map());
   const [radar, setRadar] = useState(true);
+  const [mechanics, setMechanics] = useState<MechanicsView | null>(null);
   const [showTowers, setShowTowers] = useState(true);
   const [now, setNow] = useState(() => new Date());
 
@@ -69,6 +71,12 @@ export default function Flight() {
     const timer = setInterval(() => setNow(new Date()), TICK_MS);
     return () => clearInterval(timer);
   }, []);
+
+  // The night flags and the twilight threshold come from mechanics_config like
+  // every other number — the client never decides what dusk is.
+  useEffect(() => {
+    void gateway.mechanics().then(setMechanics).catch(() => setMechanics(null));
+  }, [gateway]);
 
   const snapshot = useMemo(
     () =>
@@ -93,6 +101,16 @@ export default function Flight() {
   const mapTowers = useMemo(() => thinTowers(towers), [towers]);
   // What the smoke is flying through at this moment — the question the flight
   // view should always answer without being asked.
+  // What the tower is burning where the smoke is, right now (REDTEAM F32).
+  // Theater: shown whenever night.visuals_enabled, whatever the mechanic does.
+  const regime = useMemo(
+    () =>
+      snapshot.position === null || mechanics === null
+        ? 'smoke'
+        : regimeAt(now, snapshot.position, mechanics.twilightElevationDeg, mechanics.nightVisuals),
+    [snapshot.position, now, mechanics],
+  );
+
   const conditions = useMemo(
     () =>
       message?.state === 'IN_FLIGHT' || message?.state === 'STRANDED'
@@ -145,7 +163,7 @@ export default function Flight() {
         {unknownCells.map((cell) => (
           <UnknownWeatherMark key={cell} cell={cell} />
         ))}
-        <SmokeMarker snapshot={snapshot} state={message.state} />
+        <SmokeMarker snapshot={snapshot} state={message.state} regime={regime} />
       </SkyPanel>
 
       <Row style={{ justifyContent: 'space-between' }}>
@@ -156,6 +174,9 @@ export default function Flight() {
       <Card>
         <Body>{message.body ?? ''}</Body>
         <Small tone="faint">{stateBlurb(message.state, snapshot.awaitingConfirmation)}</Small>
+        {regime === 'fire' && mechanics !== null && (
+          <Small tone="faint">{regimeLine(regime, mechanics.nightMechanics)}</Small>
+        )}
         {conditions !== null && (
           <Small tone={conditions.adverse ? 'soft' : 'faint'}>{conditions.line}</Small>
         )}

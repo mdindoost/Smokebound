@@ -80,6 +80,52 @@ export interface MechanicsValues {
   /** Wall-clock ceiling on resolving unknown cells before a preview (REDTEAM F28). */
   'preview.resolve_budget_seconds': number;
 
+  // --- MECHANICS-V2 §2, §3 · the sun --------------------------------------
+  /**
+   * The night traversal mechanic (MECHANICS-V2 §2). Default **off**.
+   *
+   * Separate from `night.visuals_enabled` on purpose (REDTEAM F32): the map may
+   * be honest about what the sky looks like long before we switch on a
+   * multiplier. What this flag gates is the *claim* that fire is faster.
+   */
+  'night.enabled': boolean;
+  /** Fire-at-night rendering. Theater only, default **on** (REDTEAM F32). */
+  'night.visuals_enabled': boolean;
+  /** Traversal multiplier for a hop entered at night in clear air. */
+  'night.time_mult': number;
+  /** Solar elevation below which it is night. −6° = civil twilight. */
+  'night.twilight_elevation_deg': number;
+  /**
+   * Conditions in which a fire cannot be seen at range, so night confers no
+   * bonus (MECHANICS-V2 §3.2). An explicit list rather than a threshold on
+   * `time_mult`, because visibility and speed are different axes and fog proves
+   * it: 1.6× time, and the worst possible seeing.
+   */
+  'night.blinding_conditions': WeatherCondition[];
+  /**
+   * Gale garble rolls only on hops entered in daylight (MECHANICS-V2 §3.1).
+   *
+   * Integrity is information: wind shreds the *shape* of a smoke column, and a
+   * fire's meaning is its presence, so darkness is immunity. Speed is a separate
+   * axis — `wind_mult` applies in both regimes, always (REDTEAM F33).
+   */
+  'garble.daylight_only': boolean;
+
+  // --- MECHANICS-V2 §5 · counsel -----------------------------------------
+  'counsel.enabled': boolean;
+  /** Hours from now to evaluate as candidate departures. */
+  'counsel.candidate_offsets_hours': number[];
+  /** Also evaluate the next dusk and dawn *at the origin* (REDTEAM F37). */
+  'counsel.include_dusk_dawn': boolean;
+  /** Below this share of the route having hourly forecasts, counsel says nothing. */
+  'counsel.min_forecast_coverage': number;
+  /** Counsel stays quiet below this absolute saving (REDTEAM F38). */
+  'counsel.min_abs_minutes': number;
+  /** …or below this fraction of the send-now ETA (REDTEAM F38). */
+  'counsel.min_fraction': number;
+  'forecast.cache_ttl_minutes': number;
+  'forecast.horizon_hours': number;
+
   // --- REDTEAM F30 · how much certainty a preview claims ------------------
   'preview.band_base_spread': number;
   'preview.band_unknown_spread': number;

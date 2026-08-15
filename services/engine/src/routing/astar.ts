@@ -57,6 +57,24 @@ export interface PlanRouteOptions {
    * one-cell-thick storm wall should be a wall, not a sieve.
    */
   allowCornerCutting?: boolean;
+  /**
+   * When the smoke leaves the origin (MECHANICS-V2 §4.4).
+   *
+   * Supplying it makes hop costs **time-dependent**: each hop is priced by the
+   * sun at its predicted entry time, which the search already knows — `g` is
+   * accumulated hours, so entry time is simply `departAt + g`.
+   *
+   * This is the "entry-time-frozen costs" posture. For one departure instant it
+   * produces an ordinary static weighted graph, over which A* is exactly as
+   * optimal as it has always been. What it does **not** give is the true
+   * time-dependent optimum: night is faster, so leaving later can mean arriving
+   * earlier (MECHANICS-V2 §4.2 has three reproducible examples), and no
+   * frozen-cost search can see that. The 15-minute replan cron is what corrects
+   * it in flight, and the honest label is "good routes, not provably optimal".
+   *
+   * Omit it and every hop prices as daylight — v1 behaviour, exactly.
+   */
+  departAt?: Date | null;
 }
 
 /** Binary min-heap keyed by f, tie-broken by h then index for determinism. */
@@ -130,6 +148,7 @@ export function isEnterable(cell: CellId, weather: WeatherSnapshot): boolean {
 
 export function planRoute(options: PlanRouteOptions): RouteResult {
   const { origin, dest, weather, config } = options;
+  const departAt = options.departAt ?? null;
   const allowCornerCutting = options.allowCornerCutting ?? false;
 
   // The origin is never pruned: a fire under a storm still lights, it just may
@@ -179,7 +198,9 @@ export function planRoute(options: PlanRouteOptions): RouteResult {
       if (closed.has(neighborIndex)) continue;
       if (!canHop(currentCell, neighbor, weather, allowCornerCutting)) continue;
 
-      const tentative = g + hopHours(currentCell, neighbor, weather, config);
+      // Entry time for this hop: the clock the smoke would actually arrive on.
+      const entryAt = departAt === null ? null : new Date(departAt.getTime() + g * 3_600_000);
+      const tentative = g + hopHours(currentCell, neighbor, weather, config, entryAt);
       const known = gScore.get(neighborIndex);
       if (known !== undefined && tentative >= known) continue;
 

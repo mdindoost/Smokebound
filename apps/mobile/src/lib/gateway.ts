@@ -92,6 +92,21 @@ export interface MechanicsView {
   charCap: number;
   baseKmh: number;
   minFloorMinutes: number;
+  /**
+   * Draw fire-at-night on the map (REDTEAM F32). Default on: theater is always
+   * honest about what the sky looks like.
+   */
+  nightVisuals: boolean;
+  /**
+   * Whether night actually *changes* anything (REDTEAM F32).
+   *
+   * Gates copy that claims speed, and nothing else. Showing a fire is a
+   * description of the world; saying it travels faster is a claim about the
+   * model, and until this is true it would be a false one.
+   */
+  nightMechanics: boolean;
+  /** Solar elevation below which the map draws night. −6° = civil twilight. */
+  twilightElevationDeg: number;
 }
 
 /** Everything the app can do. Implemented for Supabase, and for tests. */

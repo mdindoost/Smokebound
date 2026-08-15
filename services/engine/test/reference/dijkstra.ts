@@ -23,6 +23,16 @@ export function dijkstra(
   dest: CellId,
   weather: WeatherSnapshot,
   config: MechanicsConfig,
+  /**
+   * Departure instant, for time-dependent costs (MECHANICS-V2 §4.4).
+   *
+   * The equivalence this reference exists to check is now **per frozen
+   * snapshot**: for one departure time, entry-time-frozen costs form an ordinary
+   * static graph, and A* must still match plain Dijkstra over it exactly. The
+   * label-setting argument holds because both sides price a hop the same way —
+   * from the accumulated time at the node being expanded.
+   */
+  departAt: Date | null = null,
 ): DijkstraResult {
   if (!isEnterable(dest, weather)) return { totalHours: null, route: null };
 
@@ -52,7 +62,8 @@ export function dijkstra(
     for (const neighbor of neighbors(current)) {
       if (done.has(neighbor)) continue;
       if (!canHop(current, neighbor, weather)) continue;
-      const candidate = best + hopHours(current, neighbor, weather, config);
+      const entryAt = departAt === null ? null : new Date(departAt.getTime() + best * 3_600_000);
+      const candidate = best + hopHours(current, neighbor, weather, config, entryAt);
       if (candidate < (dist.get(neighbor) ?? Infinity)) {
         dist.set(neighbor, candidate);
         prev.set(neighbor, current);

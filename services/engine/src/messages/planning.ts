@@ -98,6 +98,14 @@ export interface PlanOptions {
   prefetchCorridor?: boolean;
   /** Wall-clock ceiling on resolution. Defaults to `preview.resolve_budget_seconds`. */
   budgetMs?: number;
+  /**
+   * When the smoke actually leaves (MECHANICS-V2 §4.4).
+   *
+   * Makes hop costs time-dependent: each hop is priced by the sun at its
+   * predicted entry time. Omit it and everything prices as daylight, which is
+   * v1 behaviour — and is what `night.enabled = false` reduces to.
+   */
+  departAt?: Date | null;
 }
 
 /** Cells the router used that we have never actually looked at. */
@@ -131,7 +139,8 @@ export async function planJourney(
           expandWithPadding(cellsInBoundingBox(corridor), ctx.config.get('grid.prefetch_padding_cells')),
         );
 
-  let result = planRoute({ origin, dest, weather, config: ctx.config });
+  const departAt = options.departAt ?? null;
+  let result = planRoute({ origin, dest, weather, config: ctx.config, departAt });
   const resolvedUnknowns: CellId[] = [];
   let unresolved: CellId[] = [];
 
@@ -149,7 +158,7 @@ export async function planJourney(
       ctx.log(`plan: resolving ${missing.length} unseen cells on the chosen route`);
       weather = merge(weather, await ctx.weather.getCellWeather(missing, { deadline }));
       resolvedUnknowns.push(...missing.filter((cell) => weather.get(cell) !== undefined));
-      result = planRoute({ origin, dest, weather, config: ctx.config });
+      result = planRoute({ origin, dest, weather, config: ctx.config, departAt });
     }
 
     // What the budget did not buy. Priced at routing.unknown_cost_mult and
@@ -183,5 +192,12 @@ export async function replanFrom(
 ): Promise<PlannedJourney> {
   // Breadth here, not latency: this runs on a cron, and a wider corridor is what
   // lets a stranded message find the gap when the storm moves (REDTEAM F28).
-  return planJourney(ctx, from, dest, { resolveUnknowns: true, prefetchCorridor: true });
+  // A replan departs *now* — the smoke is already in the air, and this is the
+  // pass that corrects a frozen plan whose sun assumptions have drifted
+  // (MECHANICS-V2 §4.4).
+  return planJourney(ctx, from, dest, {
+    resolveUnknowns: true,
+    prefetchCorridor: true,
+    departAt: ctx.clock.now(),
+  });
 }

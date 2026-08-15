@@ -393,10 +393,19 @@ export class SupabaseGateway implements DataGateway {
       return value;
     };
 
+    const flag = (key: string): boolean => {
+      const value = rows.get(key);
+      if (typeof value !== 'boolean') throw new Error(`mechanics_config is missing ${key}`);
+      return value;
+    };
+
     return {
       charCap: number('message.char_cap'),
       baseKmh: number('speed.base_kmh'),
       minFloorMinutes: number('delivery.min_floor_minutes'),
+      nightVisuals: flag('night.visuals_enabled'),
+      nightMechanics: flag('night.enabled'),
+      twilightElevationDeg: number('night.twilight_elevation_deg'),
     };
   }
 

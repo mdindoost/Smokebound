@@ -24,7 +24,7 @@ import { seededRng } from '../../src/engine/rng.js';
 import type { Rng } from '../../src/engine/rng.js';
 import { WeatherCache } from '../../src/weather/cache.js';
 import { MemoryWeatherStore } from '../../src/weather/store.js';
-import type { NwsAlert, NwsClient, NwsForecast } from '../../src/weather/nws.js';
+import type { NwsAlert, NwsClient, NwsForecast, NwsHourlyPeriod } from '../../src/weather/nws.js';
 import { ensureKeeper, ensureKeeperFlock, KEEPER_ID } from '../../src/messages/keeper.js';
 import { createFlock, createTestDatabase, createUser } from '../harness.js';
 import type { TestDatabase } from '../harness.js';
@@ -58,12 +58,19 @@ export class TestClock implements Clock {
 const CLEAR: NwsForecast = { shortForecast: 'Sunny', windSpeed: '0 mph', windDirection: 'W' };
 
 /** A programmable NWS: set the sky per cell, and put warnings over cells. */
+/** How many hours of scripted sky the double hands back. */
+const HOURLY_HORIZON = 160;
+
 export class ScriptedNws implements NwsClient {
   private readonly forecasts = new Map<CellId, NwsForecast>();
   alerts: NwsAlert[] = [];
+  private readonly hourly = new Map<CellId, NwsHourlyPeriod[]>();
   fallback: NwsForecast | null = CLEAR;
   forecastCalls = 0;
+  hourlyCalls = 0;
   alertCalls = 0;
+  /** The clock the scripted hourly forecast starts from. Set by the harness. */
+  now: () => Date = () => new Date();
 
   setForecast(cells: readonly CellId[], forecast: Partial<NwsForecast>): void {
     for (const cell of cells) this.forecasts.set(cell, { ...CLEAR, ...forecast });
@@ -94,6 +101,38 @@ export class ScriptedNws implements NwsClient {
     this.forecastCalls++;
     const cell = cellId(point);
     return this.forecasts.get(cell) ?? this.fallback;
+  }
+
+  /**
+   * The hourly forecast a scripted sky would give: the same conditions, repeated
+   * across the horizon.
+   *
+   * Constant-in-time on purpose. Counsel's job is to compare *departure times*,
+   * and a fixture whose weather also changes would make a failing test
+   * ambiguous — you could not tell whether the sun or the sky moved the answer.
+   * Tests that want changing weather set it explicitly with `setHourly`.
+   */
+  async getHourlyForecast(point: LatLng): Promise<NwsHourlyPeriod[] | null> {
+    this.hourlyCalls++;
+    const cell = cellId(point);
+    const scripted = this.hourly.get(cell);
+    if (scripted) return scripted;
+
+    const base = this.forecasts.get(cell) ?? this.fallback;
+    if (base === null) return null;
+
+    const start = this.now();
+    return Array.from({ length: HOURLY_HORIZON }, (_, hour) => ({
+      startTime: new Date(start.getTime() + hour * 3_600_000).toISOString(),
+      shortForecast: base.shortForecast,
+      windSpeed: base.windSpeed,
+      windDirection: base.windDirection,
+    }));
+  }
+
+  /** Script a specific hour-by-hour sky over these cells. */
+  setHourly(cells: readonly CellId[], periods: NwsHourlyPeriod[]): void {
+    for (const cell of cells) this.hourly.set(cell, periods);
   }
 
   async getActiveAlerts(): Promise<NwsAlert[]> {
@@ -177,6 +216,7 @@ export async function createLifecycle(options: LifecycleOptions = {}): Promise<L
   const clock = new TestClock(options.start ?? START);
   const push = new RecordingPushDispatcher();
   const nws = new ScriptedNws();
+  nws.now = () => clock.now();
 
   const store = new MemoryWeatherStore();
   const weather = new WeatherCache({

@@ -51,6 +51,12 @@ class FakeNws implements NwsClient {
     }
   }
 
+  async getHourlyForecast(): Promise<null> {
+    // Counsel does not go through the cache; the current-conditions path this
+    // file exercises never asks for hourly data.
+    return null;
+  }
+
   async getActiveAlerts(): Promise<NwsAlert[]> {
     this.alertCalls++;
     if (this.failWith) throw this.failWith;

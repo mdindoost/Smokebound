@@ -20,6 +20,7 @@ import { cellCenter, displayPoint } from '@smoke/shared';
 import type { CellId } from '@smoke/shared';
 
 import { sky } from '../design/sky';
+import type { Regime } from './NightLayer';
 import { pathOf } from '../lib/flight';
 import type { FlightSnapshot } from '../lib/flight';
 
@@ -53,14 +54,23 @@ export function RouteLine({
   );
 }
 
-/** The smoke: a soft ember disc where the message is right now. */
+/**
+ * The smoke: a soft ember disc where the message is right now — or, after dark,
+ * a fire (MECHANICS-V2 §1.3, REDTEAM F32).
+ *
+ * `regime` is theater. It says what the tower is burning, and it is drawn from
+ * the same sun function the router prices hops with, so the map and the model
+ * can never disagree about whether it is night here.
+ */
 export function SmokeMarker({
   snapshot,
   state,
+  regime = 'smoke',
   onPress,
 }: {
   snapshot: FlightSnapshot;
   state: string;
+  regime?: Regime;
   onPress?: () => void;
 }) {
   if (snapshot.position === null) return null;
@@ -84,9 +94,11 @@ export function SmokeMarker({
     >
       <View
         style={{
-          width: 26,
-          height: 26,
-          borderRadius: 13,
+          // A fire is a point of light and reads smaller and brighter; a smoke
+          // column is a shape and reads wider and softer. Same mark, two moods.
+          width: regime === 'fire' ? 30 : 26,
+          height: regime === 'fire' ? 30 : 26,
+          borderRadius: 15,
           alignItems: 'center',
           justifyContent: 'center',
           // The glow: a wide soft halo, then the ember itself.

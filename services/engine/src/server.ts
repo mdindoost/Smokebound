@@ -18,6 +18,7 @@ import { createEngineContext } from './engine/context.js';
 import { startCrons } from './crons/scheduler.js';
 import { KEEPER_ID } from './messages/keeper.js';
 import { WeatherCache } from './weather/cache.js';
+import { ForecastStore } from './weather/forecast.js';
 import { HttpNwsClient } from './weather/nws.js';
 import { SqlWeatherStore } from './weather/store.js';
 import { parseTransportMode, startTransports } from './transport/index.js';
@@ -72,7 +73,17 @@ async function main(): Promise<void> {
         : undefined,
   });
 
-  const crons = startCrons(ctx);
+  const forecasts = new ForecastStore(
+    db,
+    config,
+    new HttpNwsClient({
+      userAgent: process.env['NWS_USER_AGENT'] ?? '(smoke, contact@example.com)',
+    }),
+    () => new Date(),
+    log,
+  );
+
+  const crons = startCrons(ctx, { forecasts });
   log(`engine up (transport: ${mode})`);
 
   const shutdown = async (): Promise<void> => {

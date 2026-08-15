@@ -18,10 +18,22 @@ import type { Rng } from './rng.js';
 import { NoopPushDispatcher } from './push.js';
 import type { PushDispatcher } from './push.js';
 import { assertEngineInvariants } from './guards.js';
+import { ConfigHolder, consoleAlert } from './configHolder.js';
+import type { AlertChannel } from './configHolder.js';
 
 export interface EngineContext {
   db: SqlExecutor;
-  config: MechanicsConfig;
+  /**
+   * The live config.
+   *
+   * A getter, not a field (REDTEAM F39): the engine re-reads `mechanics_config`
+   * while running, so callers must see the currently *adopted* snapshot rather
+   * than whichever one happened to exist at construction. A refused snapshot
+   * never appears here — that is the whole point of the holder.
+   */
+  readonly config: MechanicsConfig;
+  /** The holder, for the reload cron. Everything else should use `config`. */
+  configHolder: ConfigHolder;
   weather: WeatherCache;
   clock: Clock;
   rng: Rng;
@@ -45,6 +57,8 @@ export interface CreateEngineContextOptions {
   log?: (message: string) => void;
   /** Skip boot invariants. Only for tests that deliberately supply a bad config. */
   skipInvariants?: boolean;
+  /** Where a refused config is shouted about (REDTEAM F39). */
+  alert?: AlertChannel;
 }
 
 export function createEngineContext(options: CreateEngineContextOptions): EngineContext {
@@ -55,9 +69,18 @@ export function createEngineContext(options: CreateEngineContextOptions): Engine
     throw new Error('previewSecret is required — preview tokens must be signed');
   }
 
+  const holder = new ConfigHolder(
+    options.config,
+    options.log ?? (() => {}),
+    options.alert ?? consoleAlert,
+  );
+
   return {
     db: options.db,
-    config: options.config,
+    get config() {
+      return holder.config;
+    },
+    configHolder: holder,
     weather: options.weather,
     clock: options.clock ?? systemClock,
     rng: options.rng ?? systemRng,

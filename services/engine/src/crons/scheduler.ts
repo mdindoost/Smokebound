@@ -15,6 +15,7 @@ import { runDissipation } from './dissipation.js';
 import { runKeeperReplies } from './keeperReply.js';
 import { runReplan } from './replan.js';
 import { runWarming } from './warming.js';
+import type { ForecastStore } from '../weather/forecast.js';
 
 export interface CronHandle {
   stop(): void;
@@ -29,7 +30,12 @@ async function guarded(ctx: EngineContext, name: string, task: () => Promise<unk
   }
 }
 
-export function startCrons(ctx: EngineContext): CronHandle {
+export interface CronOptions {
+  /** Hourly forecasts for counsel. Omitted where counsel is not in play. */
+  forecasts?: ForecastStore;
+}
+
+export function startCrons(ctx: EngineContext, options: CronOptions = {}): CronHandle {
   const minute = 60_000;
   const timers: NodeJS.Timeout[] = [];
 
@@ -48,13 +54,22 @@ export function startCrons(ctx: EngineContext): CronHandle {
 
   // REDTEAM F31. Runs often and cheaply; the budget, not the interval, is what
   // bounds it.
-  every(ctx.config.get('warming.interval_minutes'), 'warming', () => runWarming(ctx));
+  every(ctx.config.get('warming.interval_minutes'), 'warming', () =>
+    runWarming(ctx, options.forecasts),
+  );
+
+  // REDTEAM F39: the engine re-reads mechanics_config while running and refuses
+  // to adopt a snapshot that fails its invariants, keeping the last good one.
+  // A config table nobody can edit without a restart is not a config table.
+  every(ctx.config.get('warming.interval_minutes'), 'config-reload', () =>
+    ctx.configHolder.reload(ctx.db),
+  );
 
   every(ctx.config.get('routing.dissipation_check_interval_hours') * 60, 'dissipation', () =>
     runDissipation(ctx),
   );
 
-  ctx.log('crons started: delivery-check, replan, warming, dissipation');
+  ctx.log('crons started: delivery-check, replan, warming, config-reload, dissipation');
 
   return {
     stop(): void {
@@ -64,9 +79,12 @@ export function startCrons(ctx: EngineContext): CronHandle {
 }
 
 /** One pass of every cron, in order. Useful for a manual sweep or a smoke test. */
-export async function runAllCronsOnce(ctx: EngineContext): Promise<void> {
+export async function runAllCronsOnce(
+  ctx: EngineContext,
+  options: CronOptions = {},
+): Promise<void> {
   // Warming first: everything after it plans better on a warmer sky.
-  await runWarming(ctx);
+  await runWarming(ctx, options.forecasts);
   await runDeliveryCheck(ctx);
   await runReplan(ctx);
   await runDissipation(ctx);

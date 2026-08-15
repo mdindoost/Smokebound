@@ -115,9 +115,17 @@ function codeOnly(source: string): string[] {
   });
 }
 
-/** Matches the literal as a standalone number, not as part of a longer one. */
+/**
+ * Matches the literal as a standalone number, not as part of a longer one.
+ *
+ * The trailing guard has to refuse a decimal point followed by a digit, not just
+ * a digit: without it, the sun's mean-longitude constant 280.46 reads as the
+ * 280-character message cap, and the guard fails a file whose only crime is
+ * astronomy. Rejecting `.\d` as well keeps the guard strict about real literals
+ * while leaving longer numbers that merely start the same way alone.
+ */
 function literalRegex(literal: string): RegExp {
-  return new RegExp(`(?<![\\w.])${literal.replace('.', '\\.')}(?![\\d])`);
+  return new RegExp(`(?<![\\w.])${literal.replace('.', '\\.')}(?![\\d]|\\.\\d)`);
 }
 
 describe('ARCHITECTURE §10: gameplay numbers live only in mechanics_config seeding', () => {
@@ -145,6 +153,16 @@ describe('ARCHITECTURE §10: gameplay numbers live only in mechanics_config seed
     }
 
     expect(violations).toEqual([]);
+  });
+
+  it('does not mistake a longer number for a gameplay literal', () => {
+    // 280.46 is the sun's mean longitude at epoch (geo/sun.ts). It is not the
+    // 280-character message cap, and a guard that cannot tell them apart would
+    // teach people to add exemptions instead of reading the finding.
+    expect(literalRegex('280').test('const meanLongitude = (280.46 + rate * n) % 360;')).toBe(false);
+    expect(literalRegex('280').test('const cap = 280;')).toBe(true);
+    expect(literalRegex('0.7').test('const mult = 0.75;')).toBe(false);
+    expect(literalRegex('0.7').test('const floor = 0.7;')).toBe(true);
   });
 
   it('never reads a deprecated config key from computation code', () => {

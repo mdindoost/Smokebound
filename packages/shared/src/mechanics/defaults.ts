@@ -78,6 +78,107 @@ export const MECHANICS_SPEC = {
       'routing.unknown_cost_mult and the preview returns. A person is waiting.',
   },
 
+  // --- MECHANICS-V2 §2, §3 · the sun (REDTEAM F32–F36) --------------------
+  'night.enabled': {
+    value: false,
+    tune: true,
+    source: 'MECHANICS-V2 §2, §6',
+    note: 'Night traversal. Off for the beta baseline week; see the §6.2 flip sequence.',
+  },
+  'night.visuals_enabled': {
+    value: true,
+    tune: true,
+    source: 'REDTEAM F32',
+    note:
+      'Fire-at-night on the map. Default ON: theater is always honest about what the ' +
+      'sky looks like. No copy may claim SPEED unless night.enabled is also true.',
+  },
+  'night.time_mult': {
+    value: 0.75,
+    tune: true,
+    source: 'MECHANICS-V2 §2.1',
+    note: 'A fire carries further than smoke, so the relay chain moves faster after dark.',
+  },
+  'night.twilight_elevation_deg': {
+    value: -6.0,
+    tune: true,
+    source: 'MECHANICS-V2 §1.1',
+    note:
+      'Civil twilight. Sunset (0) is too early — smoke still reads for half an hour ' +
+      'after — and nautical (-12) is too late, by which point it has plainly been dark.',
+  },
+  'night.blinding_conditions': {
+    value: ['fog', 'mist', 'snow', 'heavy_rain', 'thunderstorm'],
+    tune: true,
+    source: 'MECHANICS-V2 §3.2, REDTEAM F35',
+    note:
+      'No night bonus: a fire cannot be seen at range through these. A list, not a ' +
+      'threshold on time_mult — fog costs only 1.6x yet blinds completely, so ' +
+      'visibility and speed are different axes. Snow stays undivided (F35): NWS text ' +
+      'does not reliably separate flurries from heavy, and a list an operator can ' +
+      'explain beats a distinction the data cannot support.',
+  },
+  'garble.daylight_only': {
+    value: false,
+    tune: true,
+    source: 'MECHANICS-V2 §3.1, REDTEAM F33',
+    note: 'Wind shreds a smoke column\'s shape; it cannot shred a stationary light.',
+  },
+
+  // --- MECHANICS-V2 §5 · counsel (REDTEAM F37, F38, F42) ------------------
+  'counsel.enabled': {
+    value: false,
+    tune: true,
+    source: 'MECHANICS-V2 §5',
+    note: 'Advisory only. Counsel never delays a send; the player lights the fire.',
+  },
+  'counsel.candidate_offsets_hours': {
+    value: [0, 2, 4],
+    tune: true,
+    source: 'MECHANICS-V2 §5.2',
+    note: 'Departure times to compare, in hours from now.',
+  },
+  'counsel.include_dusk_dawn': {
+    value: true,
+    tune: true,
+    source: 'REDTEAM F37',
+    note: 'Dusk and dawn AT THE ORIGIN — the sender\'s own sky, the one out the window.',
+  },
+  'counsel.min_forecast_coverage': {
+    value: 0.8,
+    tune: true,
+    source: 'MECHANICS-V2 §5.4',
+    note:
+      'Counsel reads only cached hourly forecasts and never blocks. Below this ' +
+      'coverage it says nothing at all — no spinner, no partial advice.',
+  },
+  'counsel.min_abs_minutes': {
+    value: 30,
+    tune: true,
+    source: 'REDTEAM F38',
+    note: 'Counsel stays quiet below this saving.',
+  },
+  'counsel.min_fraction': {
+    value: 0.05,
+    tune: true,
+    source: 'REDTEAM F38',
+    note:
+      '…or below this fraction of the send-now ETA. Makes counsel confident on short ' +
+      'routes and silent on long ones by construction: you cannot outrun the planet.',
+  },
+  'forecast.cache_ttl_minutes': {
+    value: 60,
+    tune: true,
+    source: 'MECHANICS-V2 §5.3',
+    note: 'NWS regenerates hourly forecasts about hourly.',
+  },
+  'forecast.horizon_hours': {
+    value: 156,
+    tune: true,
+    source: 'MECHANICS-V2 §5.3',
+    note: 'How far ahead hourly rows are kept. Bounds table growth with warmed cells.',
+  },
+
   // --- REDTEAM F30 · how much certainty a preview claims -------------------
   'preview.band_base_spread': {
     value: 0.1,
