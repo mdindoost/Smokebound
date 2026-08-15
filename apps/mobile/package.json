@@ -9,10 +9,10 @@
     "ios": "expo start --ios",
     "android": "expo start --android",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "fonts:subset": "node scripts/subset-fonts.mjs"
   },
   "dependencies": {
-    "@expo-google-fonts/eb-garamond": "^0.4.3",
     "@smoke/shared": "*",
     "@supabase/supabase-js": "^2.112.3",
     "expo": "~54.0.0",
@@ -35,7 +35,9 @@
     "@expo/ngrok": "^4.1.3",
     "@smoke/engine": "^0.1.0",
     "@types/react": "~19.1.10",
+    "subset-font": "^2.5.0",
     "typescript": "~5.9.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "@expo-google-fonts/eb-garamond": "^0.4.3"
   }
 }

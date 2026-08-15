@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SMOKE — your message, the sky's schedule</title>
+<meta name="description" content="A messenger that sends your words by smoke signal, routed around real weather. Genuinely no practical use." />
+<meta property="og:title" content="SMOKE" />
+<meta property="og:description" content="Your message. The sky's schedule." />
+<meta name="theme-color" content="#F5EADA" />
+<style>
+  /* Parchment, ember, sky — the same palette as the app (DESIGN.md §1). */
+  :root {
+    --parchment: #F5EADA;
+    --parchment-raised: #FBF4E9;
+    --parchment-sunk: #EADCC6;
+    --edge: #DCC9AC;
+    --ink: #2B211A;
+    --ink-soft: #5A4B3E;
+    --ink-faint: #8C7A69;
+    --ember: #C2521C;
+    --ember-dim: #8E3A12;
+    --sky-panel: #131A21;
+    --sky-text: #E8E1D4;
+    --measure: 34rem;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--parchment);
+    color: var(--ink);
+    font: 400 1.0625rem/1.65 ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap { max-width: var(--measure); margin: 0 auto; padding: 0 1.5rem; }
+
+  /* --- hero ------------------------------------------------------------ */
+  header { padding: 5.5rem 0 3.5rem; text-align: center; }
+
+  .mark {
+    font: 600 0.75rem/1 ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ember);
+    margin: 0 0 1.75rem;
+  }
+
+  h1 {
+    font-size: clamp(2.25rem, 8vw, 3.5rem);
+    line-height: 1.1;
+    font-weight: 400;
+    margin: 0 0 1rem;
+    letter-spacing: -0.01em;
+  }
+
+  .sub { font-size: 1.1875rem; color: var(--ink-soft); margin: 0 auto 2.25rem; max-width: 28rem; }
+
+  .cta {
+    display: inline-block;
+    background: var(--ember);
+    color: var(--parchment-raised);
+    text-decoration: none;
+    font: 600 1rem/1 ui-sans-serif, system-ui, sans-serif;
+    padding: 0.95rem 2rem;
+    border-radius: 999px;
+  }
+  .cta:hover { background: var(--ember-dim); }
+  .cta[aria-disabled="true"] { background: var(--parchment-sunk); color: var(--ink-faint); cursor: default; }
+
+  .cta-note { font-size: 0.875rem; color: var(--ink-faint); margin: 0.9rem 0 0; }
+
+  /* --- the map ---------------------------------------------------------- */
+  figure { margin: 0 0 4rem; }
+
+  .panel {
+    background: var(--sky-panel);
+    border-radius: 14px;
+    padding: 1.25rem;
+    border: 1px solid #2C3B47;
+  }
+  .panel svg { display: block; width: 100%; height: auto; }
+
+  figcaption {
+    font: 400 0.9375rem/1.5 inherit;
+    color: var(--ink-faint);
+    text-align: center;
+    margin-top: 0.85rem;
+  }
+
+  /* --- sections --------------------------------------------------------- */
+  section { padding: 0 0 4rem; }
+
+  h2 {
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 1.5rem;
+  }
+
+  .moment {
+    background: var(--parchment-raised);
+    border: 1px solid var(--edge);
+    border-radius: 12px;
+    padding: 1.35rem 1.5rem;
+    margin-bottom: 0.85rem;
+  }
+  .moment p { margin: 0; }
+  .moment .said { font-size: 1.0625rem; }
+  .moment .why { font-size: 0.9375rem; color: var(--ink-faint); margin-top: 0.45rem; }
+
+  p { margin: 0 0 1.1rem; }
+  a { color: var(--ember-dim); }
+
+  .history p { color: var(--ink-soft); }
+  .history strong { font-weight: 600; color: var(--ink); }
+
+  footer {
+    border-top: 1px solid var(--edge);
+    padding: 2.25rem 0 3.5rem;
+    font-size: 0.9375rem;
+    color: var(--ink-faint);
+  }
+  footer a { color: var(--ink-soft); }
+  footer p { margin: 0 0 0.6rem; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .smoke { animation: drift 9s ease-in-out infinite; }
+    @keyframes drift {
+      0%, 100% { opacity: 0.85; r: 5; }
+      50% { opacity: 1; r: 6.5; }
+    }
+  }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <p class="mark">Smokebound</p>
+  <h1>Your message.<br />The sky's schedule.</h1>
+  <p class="sub">
+    A messenger that sends your words by smoke signal — routed around real
+    weather, at the speed smoke actually travels. Genuinely no practical use.
+  </p>
+  <a class="cta" href="#" aria-disabled="true">Coming to the App&nbsp;Store</a>
+  <p class="cta-note">In closed beta.</p>
+</header>
+
+<div class="wrap">
+  <figure>
+    <div class="panel">
+      <!-- The detour: a route bending south around a storm. Same vocabulary as
+           the app's map — ember trail, cool line ahead, radar in its own hues. -->
+      <svg viewBox="0 0 640 260" role="img" aria-label="A smoke route bending south around a storm system over Pennsylvania on its way from New Jersey to Chicago.">
+        <defs>
+          <radialGradient id="storm" cx="50%" cy="50%">
+            <stop offset="0%" stop-color="#4E8C6A" stop-opacity="0.75" />
+            <stop offset="60%" stop-color="#3E6E88" stop-opacity="0.45" />
+            <stop offset="100%" stop-color="#3E6E88" stop-opacity="0" />
+          </radialGradient>
+          <radialGradient id="glow" cx="50%" cy="50%">
+            <stop offset="0%" stop-color="#F6C88A" stop-opacity="0.55" />
+            <stop offset="100%" stop-color="#F6C88A" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+
+        <!-- land, sketched -->
+        <path d="M40 180 Q150 150 250 165 T430 140 T600 120" fill="none" stroke="#1A232B" stroke-width="34" stroke-linecap="round" opacity="0.85" />
+
+        <!-- the storm the route is avoiding -->
+        <ellipse cx="330" cy="96" rx="105" ry="52" fill="url(#storm)" />
+
+        <!-- flown, in ember -->
+        <path d="M560 128 Q470 150 400 168 T268 176" fill="none" stroke="#E2802F" stroke-width="2.5" stroke-linecap="round" />
+        <!-- still to come, cool and dashed -->
+        <path d="M268 176 Q190 182 96 150" fill="none" stroke="#4A5C6B" stroke-width="2" stroke-dasharray="6 6" stroke-linecap="round" />
+
+        <!-- towers -->
+        <g fill="#C7B79A">
+          <circle cx="560" cy="128" r="2.5" />
+          <circle cx="400" cy="168" r="2.5" />
+          <circle cx="96" cy="150" r="2.5" />
+        </g>
+
+        <!-- the smoke -->
+        <circle cx="268" cy="176" r="16" fill="url(#glow)" />
+        <circle class="smoke" cx="268" cy="176" r="5" fill="#E2802F" />
+
+        <text x="576" y="150" fill="#8FA0AE" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="end">Newark</text>
+        <text x="96" y="138" fill="#8FA0AE" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="middle">Chicago</text>
+        <text x="330" y="52" fill="#8FA0AE" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" text-anchor="middle">thunderstorms over Pennsylvania</text>
+      </svg>
+    </div>
+    <figcaption>
+      A real storm over Pennsylvania, a real detour south, about five hours added.
+      The weather is not a dice roll — it is the weather.
+    </figcaption>
+  </figure>
+
+  <section>
+    <h2>Three things it will say to you</h2>
+
+    <div class="moment">
+      <p class="said">“Sheltering from a thunderstorm over Ohio — 6 h 12 m stranded.”</p>
+      <p class="why">Smoke waits at the edge of a storm. You watch it wait.</p>
+    </div>
+
+    <div class="moment">
+      <p class="said">“HEEP! THE CAR BROKE DOWN”</p>
+      <p class="why">A gale tore at it near Bloomsburg. Wind-damaged, delivered anyway. The original is gone — that is the bit.</p>
+    </div>
+
+    <div class="moment">
+      <p class="said">“This signal travelled 412 miles. On foot: 5 days.”</p>
+      <p class="why">Every delivered message tells you what it cost.</p>
+    </div>
+  </section>
+
+  <section class="history">
+    <h2>Where this comes from</h2>
+    <p>
+      Signalling by smoke and fire is one of the oldest communication technologies
+      there is, and it belongs to no single culture. Along the
+      <strong>Great Wall of China</strong>, beacon towers passed word faster than
+      any rider could carry it. <strong>Polybius</strong> described a Greek torch
+      telegraph in the second century BC that could spell out arbitrary
+      messages — two walls of torches and a codebook.
+      <strong>Aboriginal Australian</strong> peoples used smoke to signal presence
+      and intention across great distances, and it remains meaningful today.
+      Many <strong>Native American nations</strong> used smoke signalling, and
+      that heritage is living, not historical.
+    </p>
+    <p>
+      SMOKE draws on that worldwide history with respect and without costume. You
+      will find no feathers here, no teepees, no invented “Indian” names, and no
+      caricature. The app carries a history page crediting all of it, because the
+      research is the interesting part.
+    </p>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <p>
+      Your smoke travels at about 20 mph. It is routed cell by cell across the
+      continental United States using live forecasts from the National Weather
+      Service, and it goes around storms rather than through them. A message to
+      the next town takes an hour. A message across the country takes days.
+    </p>
+    <p>
+      Longer messages take longer to send, because the fire has to puff them out
+      one breath at a time. This encourages brevity, which is the polite word for
+      what it does.
+    </p>
+  </section>
+</div>
+
+<footer class="wrap">
+  <p><a href="privacy.html">Privacy</a> · <a href="mailto:support@smokebound.app">support@smokebound.app</a></p>
+  <p>
+    Reports of abuse or unwanted contact go to
+    <a href="mailto:support@smokebound.app">support@smokebound.app</a> and are
+    answered within 24 hours.
+  </p>
+  <p style="margin-top:1.25rem">Weather data courtesy of the US National Weather Service.</p>
+</footer>
+
+</body>
+</html>

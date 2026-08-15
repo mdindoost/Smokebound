@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "start": "tsx src/server.ts",
     "db:migrate": "tsx scripts/migrate.ts",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "report": "tsx scripts/ledgerReport.ts"
   },
   "dependencies": {
     "@smoke/shared": "*",

@@ -11,12 +11,30 @@
  * make you wait for a font.
  */
 
-import { EBGaramond_400Regular, EBGaramond_600SemiBold, useFonts } from '@expo-google-fonts/eb-garamond';
+import { useFonts } from 'expo-font';
 
 export const SERIF_REGULAR = 'EBGaramond_400Regular';
 export const SERIF_SEMIBOLD = 'EBGaramond_600SemiBold';
 
+/**
+ * The faces are **subset** copies in `assets/fonts/`, not the package's own
+ * (see `scripts/subset-fonts.mjs`): 959 KB of EB Garamond becomes 346 KB by
+ * dropping Greek, Cyrillic and the alternates this app cannot draw.
+ *
+ * Nothing is lost that worked before. MECHANICS §5 makes any script a legal
+ * message, and that already leans on system fallback for everything EB
+ * Garamond lacks — no Devanagari, no Arabic, no CJK, no emoji. Dropping Greek
+ * and Cyrillic moves two more scripts into the same fallback every other
+ * non-Latin script already uses.
+ *
+ * The subsets are committed rather than generated at build time, because a step
+ * that must run before the app can render text is a step that will one day not
+ * run.
+ */
 export function useAppFonts(): boolean {
-  const [loaded] = useFonts({ EBGaramond_400Regular, EBGaramond_600SemiBold });
+  const [loaded] = useFonts({
+    EBGaramond_400Regular: require('../../assets/fonts/EBGaramond_400Regular.ttf'),
+    EBGaramond_600SemiBold: require('../../assets/fonts/EBGaramond_600SemiBold.ttf'),
+  });
   return loaded;
 }
