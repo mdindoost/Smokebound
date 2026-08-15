@@ -61,7 +61,7 @@ async function checkAhead(
     cell: here,
     blocked_cell: next,
     at_origin: here === message.origin_cell,
-  });
+  }, now);
   await ctx.push.dispatch({
     userId: message.sender,
     kind: 'STRANDED',
@@ -110,7 +110,7 @@ async function tryToResume(
     cell: from,
     total_hours: journey.result.totalHours,
     eta: eta.toISOString(),
-  });
+  }, now);
   await ctx.push.dispatch({
     userId: message.sender,
     kind: 'RESUMED',

@@ -133,7 +133,9 @@ describe('mechanics defaults mirror MECHANICS.md', () => {
     for (const key of MECHANICS_KEYS) {
       const entry = MECHANICS_SPEC[key];
       // MECHANICS-V2 is a document in its own right, not a variant spelling.
-      expect(entry.source).toMatch(/^(MECHANICS(-V2)?|ARCHITECTURE|SPEC|REDTEAM|DESIGN) §?/);
+      // Milestone work orders (M5.7 §2) are a legitimate provenance alongside the
+      // standing documents: they are where a ruling was actually made.
+      expect(entry.source).toMatch(/^(MECHANICS(-V2)?|ARCHITECTURE|SPEC|REDTEAM|DESIGN|M\d(\.\d)?) §?/);
       expect(typeof entry.tune).toBe('boolean');
     }
     // The five numbers MECHANICS §8 flags as most likely to move must be tunable.

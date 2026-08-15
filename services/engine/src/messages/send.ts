@@ -380,7 +380,7 @@ export async function sendMessage(ctx: EngineContext, request: SendRequest): Pro
     total_hours: totalHours,
     no_route: journey.result.status !== 'OK',
     storms_avoided: journey.stormsAvoided.length,
-  });
+  }, now);
 
   await ctx.push.dispatch({
     userId: request.senderId,

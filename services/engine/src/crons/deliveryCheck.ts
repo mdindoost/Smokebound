@@ -74,7 +74,7 @@ async function promoteTransmitting(
       cell: message.origin_cell,
       at_origin: true,
       reason: 'no_route_at_departure',
-    });
+    }, now);
     await ctx.push.dispatch({
       userId: message.sender,
       kind: 'STRANDED',
@@ -90,7 +90,7 @@ async function promoteTransmitting(
   await recordEvent(ctx.db, message.id, 'DEPARTED', {
     cell: message.origin_cell,
     eta: message.eta,
-  });
+  }, now);
   stats.departed++;
 }
 
@@ -149,7 +149,7 @@ async function advanceInFlight(
     cell: message.dest_cell,
     garble_events: garbleEvents.length,
     wind_damaged: garbleEvents.length > 0,
-  });
+  }, now);
   await ctx.push.dispatch({
     userId: message.recipient,
     kind: 'DELIVERED',
@@ -204,7 +204,7 @@ async function rollGarbles(
       cell,
       wind_mph: entry.windMph,
       chars_hit: pending.chars_hit,
-    });
+    }, now);
   }
 
   return hits;

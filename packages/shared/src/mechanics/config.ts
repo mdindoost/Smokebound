@@ -110,6 +110,8 @@ const VALIDATORS: Record<MechanicsKey, Validator> = {
   'night.blinding_conditions': isConditionList,
   'garble.daylight_only': isBoolean,
 
+  'narration.enabled': isBoolean,
+  'narration.min_interval_hours': isFiniteNumber,
   'proximity.walk_suggest_max_minutes': isFiniteNumber,
   'proximity.walk_suggest_min_delivery_minutes': isFiniteNumber,
 

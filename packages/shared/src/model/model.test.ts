@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  EVENT_KINDS,
+import { EVENT_KINDS,
   MESSAGE_STATES,
   MESSAGE_TRANSITIONS,
   TERMINAL_MESSAGE_STATES,
   canTransition,
   flockPair,
-  isTerminalState,
-} from './index.js';
+  isTerminalState, NARRATION_KINDS } from './index.js';
 import type { MessageState } from './index.js';
 
 describe('message state machine (ARCHITECTURE §4)', () => {
@@ -64,6 +62,7 @@ describe('message state machine (ARCHITECTURE §4)', () => {
 describe('events', () => {
   it('matches the kinds listed in the schema comment', () => {
     expect(EVENT_KINDS).toEqual([
+      // Lifecycle: what happened to the message.
       'SENT',
       'DEPARTED',
       'STRANDED',
@@ -71,7 +70,24 @@ describe('events', () => {
       'GARBLED',
       'DELIVERED',
       'LOST',
+      // Tower voices (M5.7 §2): what the stations saw. Narration only.
+      'SIGHTED',
+      'WIND_ROSE',
+      'WIND_EASED',
+      'FOG_SET_IN',
+      'SKY_CLEARED',
     ]);
+  });
+
+  it('keeps narration kinds a strict subset of the event kinds', () => {
+    // The migration's check constraint and this union have to agree, or the
+    // engine writes an event Postgres refuses.
+    for (const kind of NARRATION_KINDS) {
+      expect(EVENT_KINDS).toContain(kind);
+    }
+    // Narration carries no mechanics: nothing in the lifecycle set may appear.
+    expect(NARRATION_KINDS).not.toContain('DELIVERED');
+    expect(NARRATION_KINDS).not.toContain('LOST');
   });
 });
 

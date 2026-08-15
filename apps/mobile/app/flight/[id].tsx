@@ -53,6 +53,7 @@ import { arrivalLabel, stateBlurb, stateLabel } from '../../src/lib/copy';
 import { formatDistance, formatEta, formatSince } from '../../src/lib/format';
 import { confirmedCells, flightAt, pathOf, regionFor } from '../../src/lib/flight';
 import { crossingsAlong } from '../../src/lib/crossings';
+import { towerVoice } from '../../src/lib/towerVoice';
 import { windReading } from '../../src/lib/wind';
 import { regimeAt, regimeInCell, regimeLine, terminatorPath } from '../../src/map/NightLayer';
 import { useSession } from '../../src/lib/session';
@@ -340,6 +341,7 @@ export default function Flight() {
                 mechanics === null
                   ? 'smoke'
                   : regimeAtEvent(event, mechanics.twilightElevationDeg, mechanics.nightVisuals),
+                event.at,
               )}
             </Small>
             <Caption>{formatSince(event.at, now)}</Caption>
@@ -392,7 +394,12 @@ function eventLine(
   kind: string,
   payload: Record<string, unknown> | null,
   regime: 'smoke' | 'fire' = 'smoke',
+  at = '',
 ): string {
+  // Tower voices speak for themselves where they have something to say (§2).
+  const voice = towerVoice({ kind, at, payload });
+  if (voice !== null) return voice;
+
   const cell = typeof payload?.['cell'] === 'string' ? (payload['cell'] as string) : null;
   const tower = cell === null ? null : towerPhrase(cell);
 

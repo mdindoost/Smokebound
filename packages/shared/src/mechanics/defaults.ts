@@ -125,6 +125,25 @@ export const MECHANICS_SPEC = {
     note: 'Wind shreds a smoke column\'s shape; it cannot shred a stationary light.',
   },
 
+  // --- M5.7 §2 · tower voices ---------------------------------------------
+  'narration.enabled': {
+    value: true,
+    tune: true,
+    source: 'M5.7 §2',
+    note:
+      'Tower voices in the Ledger. Narration only — no route, no ETA, no ' +
+      'outcome — so it does not disturb the week-1 baseline it ships alongside.',
+  },
+  'narration.min_interval_hours': {
+    value: 3,
+    tune: true,
+    source: 'M5.7 §2',
+    note:
+      'At most one tower voice per message per this interval. A three-day ' +
+      'flight should yield a satisfying scroll, not a feed. When several things ' +
+      'happen inside one window the engine keeps the most interesting.',
+  },
+
   // --- MECHANICS §7.1 · the walk-over suggestion --------------------------
   'proximity.walk_suggest_max_minutes': {
     value: 60,

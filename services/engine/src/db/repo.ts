@@ -209,15 +209,32 @@ export async function updateMessage(
   return rows[0]!;
 }
 
+/**
+ * Write an event.
+ *
+ * `at` stamps `created_at` from the **engine's** clock rather than the
+ * database's, and the difference is not cosmetic. Every other timestamp the
+ * engine writes — `eta`, `departed_at`, `stranded_since` — comes from
+ * `ctx.clock`, which is what makes the whole lifecycle testable by
+ * fast-forwarding a fake clock (ARCHITECTURE §9). Events were the one exception,
+ * and nothing depended on it until the narration throttle (M5.7 §2) compared
+ * "when did this message last speak?" against the test clock: two unrelated
+ * timelines, and a message that could never speak twice.
+ *
+ * In production both clocks are the wall clock and this changes nothing. Under a
+ * test clock it is the difference between a working throttle and a silent one.
+ */
 export async function recordEvent(
   db: SqlExecutor,
   messageId: Uuid,
   kind: EventKind,
   payload: Record<string, unknown> = {},
+  at?: Date,
 ): Promise<void> {
   await db.query(
-    `insert into public.events (message_id, kind, payload) values ($1, $2, $3::jsonb)`,
-    [messageId, kind, JSON.stringify(payload)],
+    `insert into public.events (message_id, kind, payload, created_at)
+     values ($1, $2, $3::jsonb, coalesce($4::timestamptz, now()))`,
+    [messageId, kind, JSON.stringify(payload), at?.toISOString() ?? null],
   );
 }
 

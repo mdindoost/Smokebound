@@ -111,6 +111,11 @@ export interface MechanicsValues {
    */
   'garble.daylight_only': boolean;
 
+  // --- M5.7 §2 · tower voices ---------------------------------------------
+  'narration.enabled': boolean;
+  /** At most one tower voice per message per this many hours. */
+  'narration.min_interval_hours': number;
+
   // --- MECHANICS §7.1 · the walk-over suggestion --------------------------
   /** Longest walk we would ever suggest instead of sending. */
   'proximity.walk_suggest_max_minutes': number;

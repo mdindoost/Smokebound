@@ -181,13 +181,33 @@ export interface WeatherCell {
 // ---------------------------------------------------------------------------
 
 export type EventKind =
+  // Lifecycle: things that happened *to* the message.
   | 'SENT'
   | 'DEPARTED'
   | 'STRANDED'
   | 'RESUMED'
   | 'GARBLED'
   | 'DELIVERED'
-  | 'LOST';
+  | 'LOST'
+  // Tower voices (M5.7 §2): things the *stations* saw. Narration only — these
+  // carry no mechanics, and the engine emits them only for what client-side
+  // arithmetic cannot derive. Sunset and sunrise crossings are deliberately not
+  // here: given route, ETAs and the sun they are deterministic, and storing a
+  // derivation is how tables rot.
+  | 'SIGHTED'
+  | 'WIND_ROSE'
+  | 'WIND_EASED'
+  | 'FOG_SET_IN'
+  | 'SKY_CLEARED';
+
+/** The narration subset, for throttling and for tests that assert R21. */
+export const NARRATION_KINDS: readonly EventKind[] = [
+  'SIGHTED',
+  'WIND_ROSE',
+  'WIND_EASED',
+  'FOG_SET_IN',
+  'SKY_CLEARED',
+];
 
 export const EVENT_KINDS: readonly EventKind[] = [
   'SENT',
@@ -197,6 +217,7 @@ export const EVENT_KINDS: readonly EventKind[] = [
   'GARBLED',
   'DELIVERED',
   'LOST',
+  ...NARRATION_KINDS,
 ] as const;
 
 export interface MessageEvent {

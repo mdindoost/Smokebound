@@ -14,6 +14,7 @@ import { runDeliveryCheck } from './deliveryCheck.js';
 import { runDissipation } from './dissipation.js';
 import { runKeeperReplies } from './keeperReply.js';
 import { runReplan } from './replan.js';
+import { runNarration } from './narration.js';
 import { runWarming } from './warming.js';
 import type { ForecastStore } from '../weather/forecast.js';
 
@@ -52,6 +53,10 @@ export function startCrons(ctx: EngineContext, options: CronOptions = {}): CronH
 
   every(ctx.config.get('routing.replan_interval_minutes'), 'replan', () => runReplan(ctx));
 
+  // Tower voices (M5.7 §2). Runs at replan cadence and speaks far less often:
+  // the throttle lives in the cron, not the schedule.
+  every(ctx.config.get('routing.replan_interval_minutes'), 'narration', () => runNarration(ctx));
+
   // REDTEAM F31. Runs often and cheaply; the budget, not the interval, is what
   // bounds it.
   every(ctx.config.get('warming.interval_minutes'), 'warming', () =>
@@ -69,7 +74,7 @@ export function startCrons(ctx: EngineContext, options: CronOptions = {}): CronH
     runDissipation(ctx),
   );
 
-  ctx.log('crons started: delivery-check, replan, warming, config-reload, dissipation');
+  ctx.log('crons started: delivery-check, replan, narration, warming, config-reload, dissipation');
 
   return {
     stop(): void {
@@ -87,6 +92,7 @@ export async function runAllCronsOnce(
   await runWarming(ctx, options.forecasts);
   await runDeliveryCheck(ctx);
   await runReplan(ctx);
+  await runNarration(ctx);
   await runDissipation(ctx);
   await runKeeperReplies(ctx);
 }

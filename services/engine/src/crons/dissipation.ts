@@ -73,7 +73,7 @@ export async function runDissipation(ctx: EngineContext): Promise<DissipationSta
       cell,
       reason: 'dissipated',
       stranded_hours: strandedFor,
-    });
+    }, now);
     await ctx.push.dispatch({
       userId: message.sender,
       kind: 'LOST',
