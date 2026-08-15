@@ -24,7 +24,7 @@ icons and splash, EAS build, TestFlight.
 
 ```
 smoke/
-  apps/mobile/          # Expo + TypeScript + Expo Router: the client shell and design system
+  apps/mobile/          # Expo SDK 54 + TypeScript + Expo Router: the client and design system
   services/engine/      # Node + TypeScript: migrations, seeding, weather cache, A* router
   packages/shared/      # cell math, land mask, data-model types, the MECHANICS.md transcription
   supabase/migrations/  # SQL migrations (Supabase CLI layout)
@@ -274,6 +274,12 @@ npm start --workspace apps/mobile
 
 The app is linked to the existing Expo project (`mdindoosts-team/smokebound`), so
 `npx expo start` and EAS pick it up without `eas init`.
+
+**The SDK is pinned to whatever Expo Go supports**, not to the newest release. Expo Go
+carries exactly one SDK at a time, so a project ahead of it is simply rejected on the
+phone — and a beta that people install from the App Store's Expo Go has to meet them
+where they are. Moving SDKs is `expo install --fix` plus a re-test; do it when Expo Go
+does, not before.
 
 ### Watching a flight on a real phone
 

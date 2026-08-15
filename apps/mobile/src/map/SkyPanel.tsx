@@ -55,7 +55,7 @@ export function SkyPanel({
         initialRegion={region}
         customMapStyle={darkMapStyle as unknown as MapViewProps['customMapStyle']}
         mapType="mutedStandard"
-        showsPointsOfInterests={false}
+        showsPointsOfInterest={false}
         showsTraffic={false}
         showsBuildings={false}
         showsCompass={false}
