@@ -275,6 +275,12 @@ npm start --workspace apps/mobile
 The app is linked to the existing Expo project (`mdindoosts-team/smokebound`), so
 `npx expo start` and EAS pick it up without `eas init`.
 
+**React is pinned by a root `overrides` block.** npm auto-installs peer dependencies at
+the workspace root, which lands a second, newer React beside the one the app pins — and
+two Reacts in one bundle means components render from one copy while hooks come from the
+other (`Cannot read property 'useMemo' of null`). If that error ever returns, count the
+copies: `find . -path "*/node_modules/react/package.json"`.
+
 **The SDK is pinned to whatever Expo Go supports**, not to the newest release. Expo Go
 carries exactly one SDK at a time, so a project ahead of it is simply rejected on the
 phone — and a beta that people install from the App Store's Expo Go has to meet them
