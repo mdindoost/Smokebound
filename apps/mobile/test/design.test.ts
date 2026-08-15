@@ -110,3 +110,24 @@ describe('only the smoke glows (DESIGN.md V2)', () => {
     expect(sky.towerLight).not.toBe(sky.trail);
   });
 });
+
+describe('controls that sit on parchment are parchment (DESIGN.md V1)', () => {
+  // The sky sub-palette is "used inside the map surface only". The radar and
+  // tower switches sit below the panel, on the page — built from sky tokens
+  // they became a chip of map floating on parchment, ember on dark brown at
+  // 3.8:1, and the first person to see them said so.
+  it('keeps the map switches legible on the page', () => {
+    expect(contrast(colors.text, colors.surface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(colors.textSoft, colors.background)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('does not put ember text on parchment at caption size', () => {
+    // Ember is the shout, not the label: it fails small-text contrast on its own
+    // background, which is precisely why it is reserved for the state dot.
+    expect(contrast(colors.accent, colors.surface)).toBeLessThan(4.5);
+  });
+
+  it('keeps the switch border visible when off', () => {
+    expect(contrast(colors.border, colors.background)).toBeGreaterThan(1.2);
+  });
+});
