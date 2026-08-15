@@ -9,8 +9,9 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import type { PreviewResult, SendResult } from './engineTypes.js';
+import type { PreviewResult, SendResult } from './engineTypes';
 import type {
+  CellWeatherView,
   ConversationView,
   DataGateway,
   FlockEntry,
@@ -18,18 +19,19 @@ import type {
   ProfileView,
   SessionUser,
   ThreadMessageView,
-} from './gateway.js';
+} from './gateway';
 import {
   toConversations,
   toProfileView,
   toThreadMessage,
-} from './mapping.js';
-import type { EventRow, MessageRow, ProfileRow } from './mapping.js';
-import type { EngineTransport } from './transport.js';
+} from './mapping';
+import type { EventRow, MessageRow, ProfileRow } from './mapping';
+import type { EngineTransport } from './transport';
 
 const MESSAGE_COLUMNS =
   'id, sender, recipient, body, body_delivered, state, origin_cell, dest_cell, ' +
-  'departed_at, eta, delivered_at, stranded_cell, lost_cell, lost_reason, garble_events, created_at';
+  'route, segment_etas, departed_at, eta, delivered_at, stranded_cell, lost_at, lost_cell, ' +
+  'lost_reason, garble_events, created_at';
 
 export class SupabaseGateway implements DataGateway {
   constructor(
@@ -266,6 +268,55 @@ export class SupabaseGateway implements DataGateway {
       .order('created_at', { ascending: true });
 
     return { rows, events: (events ?? []) as EventRow[] };
+  }
+
+  /**
+   * Your own signals still in the air (ARCHITECTURE §7.1).
+   *
+   * "Your flock's smoke" in the spec means your own: RLS hides an undelivered
+   * message from its recipient entirely, so nobody else's smoke is visible to
+   * you even in principle. See the M5 note in the README.
+   */
+  async inFlight(): Promise<ThreadMessageView[]> {
+    const user = await this.currentUser();
+    if (!user) return [];
+
+    const { data, error } = await this.supabase
+      .from('messages')
+      .select(MESSAGE_COLUMNS)
+      .in('state', ['TRANSMITTING', 'IN_FLIGHT', 'STRANDED'])
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+
+    const rows = (data ?? []) as unknown as MessageRow[];
+    return rows.map((row) => toThreadMessage(row, [], user.id));
+  }
+
+  async cellWeather(cells: readonly string[]): Promise<Map<string, CellWeatherView>> {
+    const out = new Map<string, CellWeatherView>();
+    if (cells.length === 0) return out;
+
+    const { data } = await this.supabase
+      .from('weather_cells')
+      .select('cell, condition, impassable, weather_unknown, wind_mph')
+      .in('cell', cells as string[]);
+
+    for (const row of (data ?? []) as {
+      cell: string;
+      condition: string | null;
+      impassable: boolean;
+      weather_unknown: boolean;
+      wind_mph: number | null;
+    }[]) {
+      out.set(row.cell, {
+        cell: row.cell,
+        condition: row.condition,
+        impassable: row.impassable,
+        weatherUnknown: row.weather_unknown,
+        windMph: row.wind_mph,
+      });
+    }
+    return out;
   }
 
   async listConversations(): Promise<ConversationView[]> {

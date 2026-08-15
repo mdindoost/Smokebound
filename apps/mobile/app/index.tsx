@@ -5,9 +5,9 @@
 import { Redirect } from 'expo-router';
 import { View } from 'react-native';
 
-import { Body, Display } from '../src/design/components.js';
-import { colors, spacing } from '../src/design/tokens.js';
-import { useSession } from '../src/lib/session.js';
+import { Body, Display } from '../src/design/components';
+import { colors, spacing } from '../src/design/tokens';
+import { useSession } from '../src/lib/session';
 
 export default function Index() {
   const { stage } = useSession();
@@ -31,5 +31,5 @@ export default function Index() {
 
   if (stage === 'signed-out') return <Redirect href="/sign-in" />;
   if (stage === 'needs-profile') return <Redirect href="/onboarding/handle" />;
-  return <Redirect href="/ledger" />;
+  return <Redirect href="/sky" />;
 }

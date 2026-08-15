@@ -12,11 +12,11 @@ The design documents are the source of truth, in this order of authority:
 | [REDTEAM.md](REDTEAM.md) | Decisions already litigated — do not re-open |
 | [DESIGN.md](DESIGN.md) | The design system, and which visual decisions are closed |
 
-**Current milestone: M4 — Client shell (complete).** M1 built the monorepo, cell math,
-schema and config seeding; M2 the weather cache and A* router; M3 the message lifecycle;
-M4 the app around it — onboarding, flock and the safety surface, compose with a route
-preview, the Ledger, and a parchment/ember/sky design system. **No map yet:** the Sky, the
-radar overlay and the flight animation are M5 (ARCHITECTURE §10).
+**Current milestone: M5 — The Sky (complete).** M1 built the monorepo, cell math, schema
+and config seeding; M2 the weather cache and A* router; M3 the message lifecycle; M4 the
+client shell; M5 the map — the sky panel, NWS radar, live flight view, the tower layer,
+the loss screen, and the bundled serif. What remains is M6: push wiring, settings polish,
+icons and splash, EAS build, TestFlight.
 
 ---
 
@@ -244,12 +244,50 @@ built from the message id — so a mangled message can always be explained after
 operates on whole grapheme clusters, tested against Latin, Arabic, CJK, Devanagari and
 emoji fixtures.
 
+## The Sky (M5)
+
+The map is a **dark panel inset in a parchment app** (DESIGN.md V1), drawn with
+react-native-maps and the default providers so it runs inside Expo Go. On it:
+
+- **Radar** — NWS precipitation tiles through `UrlTile`, toggleable, at a fixed opacity
+  ceiling so weather never out-shouts the smoke (V2).
+- **The Sky (home)** — your signals in the air, each with its flown trail in ember and the
+  road ahead dashed and cool. Tap one to follow it.
+- **Flight view** — the committed route, the smoke's position interpolated client-side
+  from `segment_etas` (server truth; the interpolation is cosmetic and decides nothing),
+  the event timeline in Ledger style, the sheltering state in calm storm-grey, and a
+  hollow ring on any cell whose weather we are guessing (MECHANICS §2.1 fail-open).
+- **Towers** — every routable cell has a beacon tower named after the nearest place, from
+  a generated table (`npm run generate:tower-names -w packages/shared`). Cosmetic only:
+  the timeline says "passed the Toledo tower" and nothing in the router knows they exist.
+- **Loss screen** — where it died, why, how far from home, and "light a new fire".
+
 ## apps/mobile
 
 ```bash
 cp .env.example .env      # EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY
 npm start --workspace apps/mobile
 ```
+
+The app is linked to the existing Expo project (`mdindoosts-team/smokebound`), so
+`npx expo start` and EAS pick it up without `eas init`.
+
+### Watching a flight on a real phone
+
+The map needs a device — Expo Go on an iPhone is enough, no dev client required.
+
+1. Point the engine at your Supabase project and start it:
+   `DATABASE_URL=… PREVIEW_TOKEN_SECRET=… npm start -w services/engine`
+   (transport `table` by default, so the phone reaches it through the database and the
+   engine needs no inbound port).
+2. Speed the sky up so a flight fits in a coffee break — 32 km/h becomes 3,200:
+   `update mechanics_config set value = '3200' where key = 'speed.base_kmh';`
+   Reset it to `32` afterwards; nothing needs a redeploy either way.
+3. `npm start -w apps/mobile`, scan the QR code, sign in, and send something far —
+   Newark to Seattle crosses most of the map.
+4. To watch a stranding, put a severe warning over the next cell (the alert set is
+   re-read every pass, so it takes effect within a replan cycle), then clear it and watch
+   the route replace itself from where it waited.
 
 Screens (ARCHITECTURE §7): sign-in → handle → fire → the Keeper, then the Ledger, a
 thread, compose, flock and settings. The route preview is **text** in M4 — distance, time

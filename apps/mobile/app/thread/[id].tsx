@@ -28,13 +28,13 @@ import {
   Small,
   StateChip,
   Title,
-} from '../../src/design/components.js';
-import { spacing, stateColor } from '../../src/design/tokens.js';
-import { stateBlurb, stateLabel } from '../../src/lib/copy.js';
-import { formatEta, formatSince } from '../../src/lib/format.js';
-import { displayText, isWindDamaged } from '../../src/lib/mapping.js';
-import { useSession } from '../../src/lib/session.js';
-import type { ProfileView, ThreadMessageView } from '../../src/lib/gateway.js';
+} from '../../src/design/components';
+import { spacing, stateColor } from '../../src/design/tokens';
+import { stateBlurb, stateLabel } from '../../src/lib/copy';
+import { formatEta, formatSince } from '../../src/lib/format';
+import { displayText, isWindDamaged } from '../../src/lib/mapping';
+import { useSession } from '../../src/lib/session';
+import type { ProfileView, ThreadMessageView } from '../../src/lib/gateway';
 
 export default function Thread() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -159,7 +159,14 @@ function MessageBubble({
             <Small tone="faint">{stateBlurb(message.state)}</Small>
           )}
           {message.direction === 'out' && message.eta !== null && message.state !== 'DELIVERED' && (
-            <Mono>arrives {formatEta(message.eta)}</Mono>
+            <Pressable accessibilityRole="button" onPress={() => router.push(`/flight/${message.id}`)}>
+              <Mono>arrives {formatEta(message.eta)} · follow it</Mono>
+            </Pressable>
+          )}
+          {message.state === 'LOST' && (
+            <Pressable accessibilityRole="button" onPress={() => router.push(`/loss/${message.id}`)}>
+              <Caption tone="accent">See where it died</Caption>
+            </Pressable>
           )}
           {message.state === 'LOST' && (
             <Mono tone="faint">

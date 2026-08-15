@@ -168,13 +168,13 @@ describe('what you may say', () => {
       sendMessage(life.ctx, {
         senderId: PEOPLE.alice.id,
         recipientId: PEOPLE.bob.id,
-        // 250 clusters, but each is a long combining sequence: legal by the cap,
-        // too big for the column.
-        body: 'a\u0301\u0302\u0303\u0304\u0305\u0306\u0307\u0308\u0309'.repeat(250),
+        // 280 clusters, each a long combining sequence: legal by the cap, and
+        // still too big for the column even with the F25 headroom.
+        body: 'a\u0301\u0302\u0303\u0304\u0305\u0306\u0307\u0308\u0309\u030A\u030B\u030C\u030D\u030E'.repeat(280),
       }),
       'BODY_TOO_LONG',
     );
-    expect(error.details).toMatchObject({ unit: 'storage', bound: 2000 });
+    expect(error.details).toMatchObject({ unit: 'storage', bound: 4000 });
   });
 
   it('refuses an empty message', async () => {

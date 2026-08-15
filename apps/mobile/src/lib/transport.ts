@@ -13,8 +13,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { EngineRequestError } from './engineTypes.js';
-import type { EngineReply, EngineRequestKind } from './engineTypes.js';
+import { EngineRequestError } from './engineTypes';
+import type { EngineReply, EngineRequestKind } from './engineTypes';
 
 export interface EngineTransport {
   request<T>(kind: EngineRequestKind, payload: Record<string, unknown>): Promise<T>;

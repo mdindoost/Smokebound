@@ -5,8 +5,8 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 
-import { Body, Button, Card, Field, Screen, Small, Title } from '../../src/design/components.js';
-import { HANDLE_MAX, validateHandle } from '../../src/lib/handle.js';
+import { Body, Button, Card, Field, Screen, Small, Title } from '../../src/design/components';
+import { HANDLE_MAX, validateHandle } from '../../src/lib/handle';
 
 export default function ClaimHandle() {
   const [handle, setHandle] = useState('');

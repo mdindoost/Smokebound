@@ -8,8 +8,8 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 
-import { Body, Button, Card, Display, Field, Screen, Small } from '../src/design/components.js';
-import { useSession } from '../src/lib/session.js';
+import { Body, Button, Card, Display, Field, Screen, Small } from '../src/design/components';
+import { useSession } from '../src/lib/session';
 
 export default function SignIn() {
   const { gateway, refresh } = useSession();

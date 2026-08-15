@@ -7,7 +7,8 @@
  * without touching a screen.
  */
 
-import type { PreviewResult, SendResult } from './engineTypes.js';
+import type { PreviewResult, SendResult } from './engineTypes';
+import type { SegmentEta } from './flight';
 
 export interface SessionUser {
   id: string;
@@ -50,10 +51,14 @@ export interface ThreadMessageView {
   eta: string | null;
   deliveredAt: string | null;
   strandedCell: string | null;
+  lostAt: string | null;
   lostCell: string | null;
   lostReason: string | null;
   originCell: string;
   destCell: string;
+  /** Server truth: the committed route, and the ETA of each waypoint. */
+  route: string[] | null;
+  segmentEtas: SegmentEta[] | null;
   garbleCount: number;
   events: MessageEventView[];
 }
@@ -65,6 +70,14 @@ export interface ConversationView {
   lastState: string | null;
   /** Outbound messages still in the sky. */
   inFlight: number;
+}
+
+export interface CellWeatherView {
+  cell: string;
+  condition: string | null;
+  impassable: boolean;
+  weatherUnknown: boolean;
+  windMph: number | null;
 }
 
 export interface MechanicsView {
@@ -100,6 +113,12 @@ export interface DataGateway {
   unblock(otherId: string): Promise<void>;
   listBlocked(): Promise<ProfileView[]>;
   reportMessage(messageId: string, reason: string): Promise<void>;
+
+  // --- the Sky ---
+  /** Your own signals still in the air: what the map draws (ARCHITECTURE §7.1). */
+  inFlight(): Promise<ThreadMessageView[]>;
+  /** Weather for specific cells, for marking a route (MECHANICS §2.1). */
+  cellWeather(cells: readonly string[]): Promise<Map<string, CellWeatherView>>;
 
   // --- the Ledger ---
   listConversations(): Promise<ConversationView[]>;

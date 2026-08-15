@@ -10,10 +10,10 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 
-import { Body, Button, Card, Screen, Small, Title } from '../../src/design/components.js';
-import { KEEPER_INTRO } from '../../src/lib/copy.js';
-import { useSession } from '../../src/lib/session.js';
-import type { ProfileView } from '../../src/lib/gateway.js';
+import { Body, Button, Card, Screen, Small, Title } from '../../src/design/components';
+import { KEEPER_INTRO } from '../../src/lib/copy';
+import { useSession } from '../../src/lib/session';
+import type { ProfileView } from '../../src/lib/gateway';
 
 export default function MeetTheKeeper() {
   const { gateway } = useSession();
@@ -39,7 +39,7 @@ export default function MeetTheKeeper() {
             }
           />
         )}
-        <Button label="Later — take me to the Ledger" variant="ghost" onPress={() => router.replace('/ledger')} />
+        <Button label="Later — take me to the Sky" variant="ghost" onPress={() => router.replace('/sky')} />
       </Card>
     </Screen>
   );

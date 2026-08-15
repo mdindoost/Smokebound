@@ -1,22 +1,49 @@
 {
   "expo": {
     "name": "SMOKE",
-    "slug": "smoke",
+    "slug": "smokebound",
+    "owner": "mdindoosts-team",
     "scheme": "smoke",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.smoke.app"
+      "bundleIdentifier": "com.smoke.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "SMOKE uses your approximate location once, to place your fire on the map. It stores only the 50 km cell you are in \u2014 never your exact position, and never in the background."
+      }
     },
     "android": {
-      "package": "com.smoke.app"
+      "package": "com.smoke.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "${GOOGLE_MAPS_API_KEY}"
+        }
+      }
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SMOKE uses your approximate location once, to place your fire on the map. It stores only the 50 km cell you are in \u2014 never your exact position, and never in the background."
+        }
+      ],
+      "expo-font",
+      "expo-secure-store"
+    ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0cba990d-c32e-4976-be02-21e8f2409788"
+      }
     }
   }
 }

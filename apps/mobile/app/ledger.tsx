@@ -22,12 +22,12 @@ import {
   Small,
   StateChip,
   Title,
-} from '../src/design/components.js';
-import { spacing, stateColor } from '../src/design/tokens.js';
-import { stateLabel } from '../src/lib/copy.js';
-import { formatSince } from '../src/lib/format.js';
-import { useSession } from '../src/lib/session.js';
-import type { ConversationView } from '../src/lib/gateway.js';
+} from '../src/design/components';
+import { spacing, stateColor } from '../src/design/tokens';
+import { stateLabel } from '../src/lib/copy';
+import { formatSince } from '../src/lib/format';
+import { useSession } from '../src/lib/session';
+import type { ConversationView } from '../src/lib/gateway';
 
 export default function Ledger() {
   const { gateway, profile } = useSession();
@@ -52,8 +52,8 @@ export default function Ledger() {
     <Screen>
       <Row style={{ justifyContent: 'space-between' }}>
         <Title>The Ledger</Title>
-        <Link href="/flock">
-          <Small tone="accent">Flock</Small>
+        <Link href="/sky">
+          <Small tone="accent">The Sky</Small>
         </Link>
       </Row>
 

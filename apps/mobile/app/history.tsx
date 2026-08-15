@@ -7,8 +7,8 @@
  * appears anywhere in this app; this page is where the debt is stated.
  */
 
-import { Body, Card, Screen, Small, Title } from '../src/design/components.js';
-import { HISTORY_NOTE } from '../src/lib/copy.js';
+import { Body, Card, Screen, Small, Title } from '../src/design/components';
+import { HISTORY_NOTE } from '../src/lib/copy';
 
 export default function History() {
   return (

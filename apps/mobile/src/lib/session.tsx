@@ -9,7 +9,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import type { DataGateway, ProfileView, SessionUser } from './gateway.js';
+import type { DataGateway, ProfileView, SessionUser } from './gateway';
 
 export type OnboardingStage = 'loading' | 'signed-out' | 'needs-profile' | 'ready';
 

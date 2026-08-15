@@ -19,11 +19,11 @@ import {
   Screen,
   Small,
   Title,
-} from '../src/design/components.js';
-import { spacing } from '../src/design/tokens.js';
-import { validateHandle } from '../src/lib/handle.js';
-import { useSession } from '../src/lib/session.js';
-import type { FlockEntry, ProfileView } from '../src/lib/gateway.js';
+} from '../src/design/components';
+import { spacing } from '../src/design/tokens';
+import { validateHandle } from '../src/lib/handle';
+import { useSession } from '../src/lib/session';
+import type { FlockEntry, ProfileView } from '../src/lib/gateway';
 
 export default function Flock() {
   const { gateway } = useSession();

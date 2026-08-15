@@ -44,7 +44,7 @@ const KM_PER_MILE = 1.609344;
  * Mirrors the `messages_body_check` bound in the schema (REDTEAM F20). Not a
  * gameplay number — the gameplay cap is `message.char_cap` in mechanics_config.
  */
-const STORAGE_BOUND_CHARS = 2000;
+const STORAGE_BOUND_CHARS = 4000;
 
 export interface PreviewRequest {
   senderId: Uuid;

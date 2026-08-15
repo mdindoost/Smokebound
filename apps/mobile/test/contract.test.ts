@@ -14,7 +14,7 @@ import type {
   EngineRequestKind,
   PreviewResult as ClientPreview,
   SendResult as ClientSend,
-} from '../src/lib/engineTypes.js';
+} from '../src/lib/engineTypes';
 
 describe('the engine contract', () => {
   it('gives the client exactly the preview it expects', () => {

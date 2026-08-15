@@ -11,7 +11,7 @@
  * English until a market justifies otherwise).
  */
 
-import { formatDistance, formatDuration, formatEta, formatWalk } from './format.js';
+import { formatDistance, formatDuration, formatEta, formatWalk } from './format';
 
 export const stateLabel = (state: string): string => {
   switch (state) {

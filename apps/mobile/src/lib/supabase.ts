@@ -11,9 +11,9 @@ import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 
-import { SupabaseGateway } from './supabaseGateway.js';
-import { HttpTransport, TableTransport } from './transport.js';
-import type { EngineTransport } from './transport.js';
+import { SupabaseGateway } from './supabaseGateway';
+import { HttpTransport, TableTransport } from './transport';
+import type { EngineTransport } from './transport';
 
 /** Sessions live in the keychain, not in AsyncStorage. */
 const secureStorage = {

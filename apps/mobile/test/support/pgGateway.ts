@@ -10,6 +10,7 @@
  */
 
 import type {
+  CellWeatherView,
   ConversationView,
   DataGateway,
   FlockEntry,
@@ -17,13 +18,13 @@ import type {
   ProfileView,
   SessionUser,
   ThreadMessageView,
-} from '../../src/lib/gateway.js';
-import { EngineRequestError } from '../../src/lib/engineTypes.js';
-import type { PreviewResult, SendResult } from '../../src/lib/engineTypes.js';
-import { toConversations, toProfileView, toThreadMessage } from '../../src/lib/mapping.js';
-import type { EventRow, MessageRow, ProfileRow } from '../../src/lib/mapping.js';
-import type { EngineTransport } from '../../src/lib/transport.js';
-import type { EngineRequestKind } from '../../src/lib/engineTypes.js';
+} from '../../src/lib/gateway';
+import { EngineRequestError } from '../../src/lib/engineTypes';
+import type { PreviewResult, SendResult } from '../../src/lib/engineTypes';
+import { toConversations, toProfileView, toThreadMessage } from '../../src/lib/mapping';
+import type { EventRow, MessageRow, ProfileRow } from '../../src/lib/mapping';
+import type { EngineTransport } from '../../src/lib/transport';
+import type { EngineRequestKind } from '../../src/lib/engineTypes';
 
 export interface SqlRunner {
   /** Run as the given signed-in user, with RLS applied. */
@@ -33,8 +34,8 @@ export interface SqlRunner {
 }
 
 const MESSAGE_COLUMNS = `id, sender, recipient, body, body_delivered, state, origin_cell,
-  dest_cell, departed_at, eta, delivered_at, stranded_cell, lost_cell, lost_reason,
-  garble_events, created_at`;
+  dest_cell, route, segment_etas, departed_at, eta, delivered_at, stranded_cell, lost_at, lost_cell,
+  lost_reason, garble_events, created_at`;
 
 export class PgGateway implements DataGateway {
   constructor(
@@ -192,6 +193,43 @@ export class PgGateway implements DataGateway {
       `insert into public.reports (reporter, message_id, reason) values ($1, $2, $3)`,
       [this.userId, messageId, reason],
     );
+  }
+
+  // --- the Sky --------------------------------------------------------------
+
+  async inFlight(): Promise<ThreadMessageView[]> {
+    const rows = await this.run<MessageRow>(
+      `select ${MESSAGE_COLUMNS} from public.messages
+        where state in ('TRANSMITTING', 'IN_FLIGHT', 'STRANDED')
+        order by created_at desc`,
+    );
+    return rows.map((row) => toThreadMessage(row, [], this.userId));
+  }
+
+  async cellWeather(cells: readonly string[]): Promise<Map<string, CellWeatherView>> {
+    const out = new Map<string, CellWeatherView>();
+    if (cells.length === 0) return out;
+    const rows = await this.run<{
+      cell: string;
+      condition: string | null;
+      impassable: boolean;
+      weather_unknown: boolean;
+      wind_mph: number | null;
+    }>(
+      `select cell, condition, impassable, weather_unknown, wind_mph
+         from public.weather_cells where cell = any($1::text[])`,
+      [cells as string[]],
+    );
+    for (const row of rows) {
+      out.set(row.cell, {
+        cell: row.cell,
+        condition: row.condition,
+        impassable: row.impassable,
+        weatherUnknown: row.weather_unknown,
+        windMph: row.wind_mph,
+      });
+    }
+    return out;
   }
 
   // --- the Ledger ----------------------------------------------------------

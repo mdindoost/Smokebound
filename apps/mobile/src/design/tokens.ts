@@ -63,8 +63,12 @@ export const colors = {
   distanceSoft: palette.skyPale,
   weather: palette.storm,
 
-  /** Message states (ARCHITECTURE §4). */
-  transmitting: palette.emberBright,
+  /**
+   * Message states (ARCHITECTURE §4), in their *on-parchment* form — these are
+   * chip text and borders at 12px, so they clear 3:1 against the ground. The
+   * brighter versions live in the sky sub-palette, where the background is dark.
+   */
+  transmitting: palette.ember,
   inFlight: palette.sky,
   stranded: palette.storm,
   delivered: palette.moss,
@@ -94,7 +98,16 @@ export const radii = {
  * mono face carries flight data — distances, ETAs, cell ids.
  */
 export const fonts = {
+  /**
+   * The bundled face (DESIGN.md V3). `fontsLoaded()` decides whether it is safe
+   * to name it yet; until then the platform serif stands in.
+   */
   serif: {
+    ios: 'EBGaramond_400Regular',
+    android: 'EBGaramond_400Regular',
+    default: 'EBGaramond_400Regular',
+  },
+  serifFallback: {
     ios: 'Iowan Old Style',
     android: 'serif',
     default: 'serif',

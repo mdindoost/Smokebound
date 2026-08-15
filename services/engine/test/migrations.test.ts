@@ -152,8 +152,8 @@ describe('schema constraints', () => {
     // The 280-grapheme cap lives in the engine; the column only stops absurdity.
     // 280 family emoji are 1,960 code points and must fit.
     await expect(insert('👨‍👩‍👧‍👦'.repeat(280))).resolves.toBeDefined();
-    await expect(insert('x'.repeat(2000))).resolves.toBeDefined();
-    await expect(insert('x'.repeat(2001))).rejects.toThrow();
+    await expect(insert('x'.repeat(4000))).resolves.toBeDefined();
+    await expect(insert('x'.repeat(4001))).rejects.toThrow();
   });
 
   it('rejects malformed cell ids', async () => {

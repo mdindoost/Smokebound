@@ -11,26 +11,29 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@expo-google-fonts/eb-garamond": "^0.4.3",
     "@smoke/shared": "*",
     "@supabase/supabase-js": "^2.112.3",
     "expo": "~57.0.13",
     "expo-constants": "~57.0.11",
+    "expo-font": "^57.0.1",
     "expo-linking": "~57.0.6",
     "expo-location": "^57.0.10",
     "expo-router": "~57.0.13",
     "expo-secure-store": "^57.0.1",
     "expo-status-bar": "~57.0.1",
-    "react": "~19.2.0",
-    "react-native": "0.87.0",
-    "react-native-safe-area-context": "~5.9.0",
-    "react-native-screens": "~4.27.0",
+    "react": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-maps": "1.27.2",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
     "react-native-url-polyfill": "^4.0.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.5",
     "@smoke/engine": "^0.1.0",
     "@types/react": "~19.2.0",
-    "typescript": "~5.9.2",
+    "typescript": "~6.0.3",
     "vitest": "^4.1.10"
   }
 }

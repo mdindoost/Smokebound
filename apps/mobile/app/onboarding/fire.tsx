@@ -17,10 +17,10 @@ import {
   Screen,
   Small,
   Title,
-} from '../../src/design/components.js';
-import { LOCATION_EXPLANATION } from '../../src/lib/copy.js';
-import { locateFire } from '../../src/lib/location.js';
-import { useSession } from '../../src/lib/session.js';
+} from '../../src/design/components';
+import { LOCATION_EXPLANATION } from '../../src/lib/copy';
+import { locateFire } from '../../src/lib/location';
+import { useSession } from '../../src/lib/session';
 
 export default function PlaceFire() {
   const { handle, displayName } = useLocalSearchParams<{ handle: string; displayName?: string }>();

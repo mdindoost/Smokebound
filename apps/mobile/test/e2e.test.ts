@@ -14,10 +14,10 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { EngineRequestError } from '../src/lib/engineTypes.js';
-import { displayText, isWindDamaged } from '../src/lib/mapping.js';
-import { ALICE, BOB, createWorld } from './support/world.js';
-import type { World } from './support/world.js';
+import { EngineRequestError } from '../src/lib/engineTypes';
+import { displayText, isWindDamaged } from '../src/lib/mapping';
+import { ALICE, BOB, createWorld } from './support/world';
+import type { World } from './support/world';
 
 let world: World | undefined;
 

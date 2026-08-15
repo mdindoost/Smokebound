@@ -9,12 +9,13 @@
  * is not visible. See the M5 note in the README.
  */
 
+import type { SegmentEta } from './flight';
 import type {
   ConversationView,
   MessageEventView,
   ProfileView,
   ThreadMessageView,
-} from './gateway.js';
+} from './gateway';
 
 export interface MessageRow {
   id: string;
@@ -25,10 +26,13 @@ export interface MessageRow {
   state: string;
   origin_cell: string;
   dest_cell: string;
+  route: string[] | null;
+  segment_etas: unknown;
   departed_at: string | null;
   eta: string | null;
   delivered_at: string | null;
   stranded_cell: string | null;
+  lost_at: string | null;
   lost_cell: string | null;
   lost_reason: string | null;
   garble_events: unknown;
@@ -77,10 +81,13 @@ export function toThreadMessage(
     eta: row.eta,
     deliveredAt: row.delivered_at,
     strandedCell: row.stranded_cell,
+    lostAt: row.lost_at,
     lostCell: row.lost_cell,
     lostReason: row.lost_reason,
     originCell: row.origin_cell,
     destCell: row.dest_cell,
+    route: Array.isArray(row.route) ? row.route : null,
+    segmentEtas: Array.isArray(row.segment_etas) ? (row.segment_etas as SegmentEta[]) : null,
     garbleCount: garbleCount(row.garble_events),
     events: events
       .filter((event) => event.message_id === row.id)

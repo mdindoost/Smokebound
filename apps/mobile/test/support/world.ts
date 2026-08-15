@@ -33,9 +33,9 @@ import {
 import type { EngineContext, NwsAlert, NwsClient, NwsForecast, TestDatabase } from '@smoke/engine';
 import type { LatLng } from '@smoke/shared';
 
-import { PgGateway, PolledTableTransport } from './pgGateway.js';
-import type { SqlRunner } from './pgGateway.js';
-import type { DataGateway } from '../../src/lib/gateway.js';
+import { PgGateway, PolledTableTransport } from './pgGateway';
+import type { SqlRunner } from './pgGateway';
+import type { DataGateway } from '../../src/lib/gateway';
 
 /** Smoke moves 100× faster in the tests, so a flight is minutes, not days. */
 export const TEST_SPEED_MULTIPLIER = 100;

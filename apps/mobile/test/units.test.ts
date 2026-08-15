@@ -17,14 +17,14 @@ import {
   stateLabel,
   HISTORY_NOTE,
   LOCATION_EXPLANATION,
-} from '../src/lib/copy.js';
-import { formatDistance, formatDuration, formatEta, formatSince, formatWalk } from '../src/lib/format.js';
-import { countGraphemes, overCap } from '../src/lib/graphemes.js';
-import { HANDLE_MAX, displayHandle, validateHandle } from '../src/lib/handle.js';
-import { cellFromCoordinates } from '../src/lib/fireCell.js';
-import { displayText, isWindDamaged, toConversations, toThreadMessage } from '../src/lib/mapping.js';
-import type { ProfileView, ThreadMessageView } from '../src/lib/gateway.js';
-import type { MessageRow } from '../src/lib/mapping.js';
+} from '../src/lib/copy';
+import { formatDistance, formatDuration, formatEta, formatSince, formatWalk } from '../src/lib/format';
+import { countGraphemes, overCap } from '../src/lib/graphemes';
+import { HANDLE_MAX, displayHandle, validateHandle } from '../src/lib/handle';
+import { cellFromCoordinates } from '../src/lib/fireCell';
+import { displayText, isWindDamaged, toConversations, toThreadMessage } from '../src/lib/mapping';
+import type { ProfileView, ThreadMessageView } from '../src/lib/gateway';
+import type { MessageRow } from '../src/lib/mapping';
 
 describe('handles', () => {
   it('accepts what the schema accepts', () => {
@@ -224,10 +224,13 @@ function row(patch: Partial<MessageRow> = {}): MessageRow {
     state: 'IN_FLIGHT',
     origin_cell: 'r037c090',
     dest_cell: 'r039c066',
+    route: null,
+    segment_etas: null,
     departed_at: '2026-08-14T12:00:30.000Z',
     eta: '2026-08-16T00:00:00.000Z',
     delivered_at: null,
     stranded_cell: null,
+    lost_at: null,
     lost_cell: null,
     lost_reason: null,
     garble_events: [],

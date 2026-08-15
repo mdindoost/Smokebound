@@ -10,14 +10,26 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } fr
 import type { PressableProps, TextInputProps, TextProps, ViewProps } from 'react-native';
 import type { ReactNode } from 'react';
 
-import { colors, elevation, fonts, radii, spacing, type } from './tokens.js';
+import { colors, elevation, fonts, radii, spacing, type } from './tokens';
 
-const face = (family: keyof typeof fonts): string =>
-  Platform.select({
-    ios: fonts[family].ios,
-    android: fonts[family].android,
-    default: fonts[family].default,
+/**
+ * Whether the bundled serif has loaded. Set once by the root layout; until then
+ * the platform serif stands in, so nothing blocks on a font (DESIGN.md V3).
+ */
+let serifReady = false;
+
+export function setSerifLoaded(loaded: boolean): void {
+  serifReady = loaded;
+}
+
+const face = (family: 'serif' | 'sans' | 'mono'): string => {
+  const key = family === 'serif' && !serifReady ? 'serifFallback' : family;
+  return Platform.select({
+    ios: fonts[key].ios,
+    android: fonts[key].android,
+    default: fonts[key].default,
   }) as string;
+};
 
 // ---------------------------------------------------------------------------
 // Text

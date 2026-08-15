@@ -1,9 +1,9 @@
 /**
  * Compose (ARCHITECTURE §7.2): pick someone, write, look at the sky, commit.
  *
- * The route preview is text in M4 — distance, time, storms dodged, and the
- * proximity joke when they are close enough to walk to (MECHANICS §7.1). M5
- * turns the same numbers into a map.
+ * The preview is a map (M5): the route it would fly, the storms it steers
+ * around, and the numbers underneath — plus the proximity joke when the two
+ * fires are close enough to walk between (MECHANICS §7.1).
  *
  * Two rules from the spec show up as code here:
  *   * the counter counts **grapheme clusters** (REDTEAM F20) — 280 emoji is a
@@ -28,14 +28,17 @@ import {
   Screen,
   Small,
   Title,
-} from '../src/design/components.js';
-import { colors, spacing } from '../src/design/tokens.js';
-import { etaWarningCopy, proximityCopy, routeSummary } from '../src/lib/copy.js';
-import { formatTransmission } from '../src/lib/format.js';
-import { countGraphemes } from '../src/lib/graphemes.js';
-import { useSession } from '../src/lib/session.js';
-import type { FlockEntry } from '../src/lib/gateway.js';
-import type { PreviewResult } from '../src/lib/engineTypes.js';
+} from '../src/design/components';
+import { colors, spacing } from '../src/design/tokens';
+import { SkyPanel } from '../src/map/SkyPanel';
+import { RouteLine, StormMark } from '../src/map/SmokeTrail';
+import { regionFor } from '../src/lib/flight';
+import { etaWarningCopy, proximityCopy, routeSummary } from '../src/lib/copy';
+import { formatTransmission } from '../src/lib/format';
+import { countGraphemes } from '../src/lib/graphemes';
+import { useSession } from '../src/lib/session';
+import type { FlockEntry } from '../src/lib/gateway';
+import type { PreviewResult } from '../src/lib/engineTypes';
 
 export default function Compose() {
   const { recipient } = useLocalSearchParams<{ recipient?: string }>();
@@ -167,6 +170,20 @@ export default function Compose() {
               disabled={!canPreview}
             />
           ) : (
+            <>
+            {preview.noRoute ? null : (
+              <SkyPanel
+                region={regionFor(preview.route ?? [preview.originCell, preview.destCell])}
+                radar
+                height={240}
+              >
+                <RouteLine flown={[]} ahead={preview.route ?? []} />
+                {preview.stormsAvoided.slice(0, 12).map((storm) => (
+                  <StormMark key={storm.cell} cell={storm.cell} />
+                ))}
+              </SkyPanel>
+            )}
+
             <Card>
               <Caption>The sky between you</Caption>
               {routeSummary({
@@ -195,6 +212,7 @@ export default function Compose() {
               <Button label="Light the fire" onPress={() => void send()} loading={busy} />
               <Button label="Rewrite" variant="ghost" onPress={() => setPreview(null)} />
             </Card>
+            </>
           )}
         </>
       )}

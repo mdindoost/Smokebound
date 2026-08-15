@@ -10,11 +10,11 @@
 
 import * as Location from 'expo-location';
 
-import { cellFromCoordinates } from './fireCell.js';
-import type { FireResult } from './fireCell.js';
+import { cellFromCoordinates } from './fireCell';
+import type { FireResult } from './fireCell';
 
-export type { FireResult } from './fireCell.js';
-export { cellFromCoordinates } from './fireCell.js';
+export type { FireResult } from './fireCell';
+export { cellFromCoordinates } from './fireCell';
 
 export async function locateFire(): Promise<FireResult> {
   const permission = await Location.requestForegroundPermissionsAsync();
