@@ -286,6 +286,11 @@ The map needs a device — Expo Go on an iPhone is enough, no dev client require
    Reset it to `32` afterwards; nothing needs a redeploy either way.
 3. `npm start -w apps/mobile`, scan the QR code, sign in, and send something far —
    Newark to Seattle crosses most of the map.
+
+   **On campus or any managed Wi-Fi**, use `npm run start:tunnel -w apps/mobile` instead.
+   Networks like NJITsecure isolate clients from each other, so the phone can reach the
+   internet but not your laptop — the QR resolves to a LAN address that will never answer.
+   The tunnel relays through Expo instead. A phone hotspot works too, and is faster.
 4. To watch a stranding, put a severe warning over the next cell (the alert set is
    re-read every pass, so it takes effect within a replan cycle), then clear it and watch
    the route replace itself from where it waited.
