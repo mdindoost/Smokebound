@@ -230,3 +230,31 @@ draft raised; F42 and F43 are findings the red-team made against the draft itsel
 Cleared for implementation as amended. F42 is the one that would have shipped: a counsel
 feature whose advice was an artefact of table choice would have been very hard to catch
 from the outside, because the advice would have looked plausible every time.
+
+---
+
+# Addendum — M5.7 (rulings F44–F45)
+
+Both came from a device rather than a review, which is the pattern worth
+noticing: F44 and F45 are things no test could have failed on, because the code
+did exactly what it was written to do.
+
+## F44 — Fire does not travel (MEDIUM, product correctness)
+**Attack:** The night layer shipped and worked — fire-styled marker, night copy, fires on the home Sky — and the fire **drifted across the map as a dot**, because it was the same marker in a different colour. Light does not move along a route. Towers kindle in sequence, and a signal's position after dark is *which tower is currently burning*. The rendering was correct in every particular and wrong as a whole, which is not a class of bug a unit test reaches.
+**Resolution:** At night the drifting marker **disappears** and the route's towers become the signal: passed towers lit, the current tower blazing and carrying the breath, towers ahead dark stone. **No travelling spark** — the kindling is the motion, and a moving dot on top would restate the same thing in the idiom the change exists to remove. The blazing link is the cell `current_leg` has confirmed, never the interpolated position: a dot between waypoints is obviously an approximation, and a *lit tower* is a claim that the fire reached that station (DESIGN.md V7). Day behaviour unchanged. R22's thinning is a daytime rule about labels; at night the towers are the signal, so the whole chain renders and zoom governs size only. The Ledger keys its copy on the regime **at the time of the event** — a message that left at dusk and arrives at noon reads as a fire kindled and a smoke delivered. (DESIGN.md V11.)
+
+## F45 — The stations had nothing to say (LOW, product)
+**Attack:** A signal crossing the country for three days produced four Ledger lines — sent, departed, delivered, and whatever went wrong. In a product whose fiction is a chain of people watching for each other's fires, the chain was silent.
+**Resolution:** **Tower voices**, in the first person, sender-side only, under three rules. *Only what cannot be derived*: sunset and sunrise crossings stay client-side, because given route, ETAs and the sun they are arithmetic both sides can do; the engine narrates *change*, which needs two observations at two times. *At most one voice per `narration.min_interval_hours`* — when several things happen in a window the most interesting is kept and the rest dropped rather than queued. *Weather beats sightings*: a sighting is what a station says when it has nothing better. R21 needed no new code — `events_select_visible_message` already withholds events from a recipient until DELIVERED, so a tower's voice reaches the sender's Ledger and nowhere else.
+
+**A real bug surfaced by F45.** The narration throttle asks when a message last spoke, and could never get a sane answer under a test clock: `events.created_at` came from the database default while every other engine timestamp — `eta`, `departed_at`, `stranded_since` — comes from `ctx.clock`. Two unrelated timelines, and a message that could never speak twice. Invisible in production, where both are the wall clock; the abstraction that exists to make the lifecycle testable simply had a hole in it. All events now carry the engine's clock.
+
+---
+
+## Verdict — M5.7
+
+F44 is the one to remember. It shipped as a *correct implementation of the wrong
+idea*, passed every test, and was caught by one person looking at a phone at
+3:29 AM. The lesson is not "write more tests" — no assertion about a marker's
+colour would have failed. It is that a rendering can be right in every particular
+and wrong as a whole, and only eyes catch that.

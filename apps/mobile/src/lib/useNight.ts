@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { cellCenter, isNight } from '@smoke/shared';
 
 import type { DataGateway, MechanicsView } from './gateway';
+import { sunNow } from './devSun';
 
 export function useNightAt(gateway: DataGateway): (cell: string | null | undefined) => boolean {
   const [mechanics, setMechanics] = useState<MechanicsView | null>(null);
@@ -27,7 +28,7 @@ export function useNightAt(gateway: DataGateway): (cell: string | null | undefin
     if (mechanics === null || !mechanics.nightVisuals) return false;
     if (cell === null || cell === undefined || cell === '') return false;
     try {
-      return isNight(new Date(), cellCenter(cell), mechanics.twilightElevationDeg);
+      return isNight(sunNow(new Date()), cellCenter(cell), mechanics.twilightElevationDeg);
     } catch {
       // An unparseable cell is not a reason to break a list.
       return false;

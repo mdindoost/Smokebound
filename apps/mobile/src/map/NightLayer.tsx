@@ -22,6 +22,8 @@ import { isNight } from '@smoke/shared';
 import type { CellId, LatLng } from '@smoke/shared';
 import { cellCenter } from '@smoke/shared';
 
+import { sunNow } from '../lib/devSun';
+
 /** What the tower is burning at this place and moment. */
 export type Regime = 'smoke' | 'fire';
 
@@ -32,7 +34,8 @@ export function regimeAt(
   visualsEnabled: boolean,
 ): Regime {
   if (!visualsEnabled) return 'smoke';
-  return isNight(at, point, twilightElevationDeg) ? 'fire' : 'smoke';
+  // `sunNow` is the identity outside a development build (see lib/devSun).
+  return isNight(sunNow(at), point, twilightElevationDeg) ? 'fire' : 'smoke';
 }
 
 /** The regime over a cell, for markers anchored to the grid. */
@@ -78,18 +81,20 @@ export function terminatorPath(
 ): LatLng[] {
   const points: LatLng[] = [];
 
+  const when = sunNow(at);
+
   for (let i = 0; i <= samples; i++) {
     const lat = bounds.minLat + ((bounds.maxLat - bounds.minLat) * i) / samples;
 
     let low = bounds.minLng;
     let high = bounds.maxLng;
-    const nightAtLow = isNight(at, { lat, lng: low }, twilightElevationDeg);
-    if (nightAtLow === isNight(at, { lat, lng: high }, twilightElevationDeg)) continue;
+    const nightAtLow = isNight(when, { lat, lng: low }, twilightElevationDeg);
+    if (nightAtLow === isNight(when, { lat, lng: high }, twilightElevationDeg)) continue;
 
     // A crossing is bracketed on this latitude; find it to about a kilometre.
     for (let step = 0; step < 18; step++) {
       const mid = (low + high) / 2;
-      if (isNight(at, { lat, lng: mid }, twilightElevationDeg) === nightAtLow) low = mid;
+      if (isNight(when, { lat, lng: mid }, twilightElevationDeg) === nightAtLow) low = mid;
       else high = mid;
     }
     points.push({ lat, lng: (low + high) / 2 });

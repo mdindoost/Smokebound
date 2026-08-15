@@ -310,6 +310,60 @@ The map needs a device — Expo Go on an iPhone is enough, no dev client require
    re-read every pass, so it takes effect within a replan cycle), then clear it and watch
    the route replace itself from where it waited.
 
+### What the sky looks like after dark
+
+Night visuals ship **on** (`night.visuals_enabled`, default true) while the night
+*mechanic* ships **off** (`night.enabled`, default false). The map is always honest about
+what the sky looks like; nothing claims fire is faster until the mechanic is switched on.
+
+After local dusk, on a flight:
+
+- **The drifting ember disappears.** After dark a signal's position is *which tower is
+  burning*, so the route's towers become the chain: passed towers lit, the current one
+  blazing and breathing, the rest dark stone. Fire does not travel (DESIGN.md V11).
+- **The terminator** — the day/night line — is drawn faint and dashed across the panel.
+  On a cross-country route you can see the smoke cross it.
+- **The copy changes.** "Your fire is on its way, tower to tower." Nothing about speed.
+- **Home fires read as burning** in Flock, the Ledger and Settings, for whichever fires
+  are in darkness — a flock spans time zones and the terminator runs between them.
+- **The Ledger gains crossings and tower voices**: *"Dusk over Little Falls. The tower lit
+  its fire."*, *"The Bloomsburg tower reports: signal sighted, passing north."*
+
+### Testing day and night without waiting for dusk
+
+Standing around until sunset is a poor loop for a feature whose bugs have twice been
+"looks fine, is wrong". In a **development bundle only**, the sun's clock can be shifted:
+
+```bash
+EXPO_PUBLIC_SUN_OFFSET_HOURS=8 npm run start:tunnel -w apps/mobile   # eight hours ahead
+EXPO_PUBLIC_SUN_OFFSET_HOURS=-8 npm run start:tunnel -w apps/mobile  # eight hours back
+```
+
+Two things this deliberately does **not** do:
+
+- **It cannot reach a production build.** `sunNow()` returns its argument unchanged when
+  `__DEV__` is false, before it looks at the variable at all. A test-only affordance that
+  ships is not a test-only affordance.
+- **It moves only the sun.** ETAs, progress, delivery and every timestamp keep the real
+  clock. A debug tool that made a flight appear to arrive eight hours early would send you
+  hunting a bug that does not exist.
+
+To exercise the *mechanic* rather than the look, flip the flags — in **one transaction**,
+because the engine validates a config snapshot as a set and will refuse an intermediate
+state (REDTEAM F39, MECHANICS-V2 §6.2):
+
+```sql
+begin;
+  update mechanics_config set value = 'true'  where key = 'night.enabled';
+  update mechanics_config set value = 'true'  where key = 'garble.daylight_only';
+  update mechanics_config set value = '0.525' where key = 'routing.heuristic_max_speed_factor';
+commit;
+```
+
+The engine re-reads config on a cron and adopts it without a restart. Flip the keys
+separately and it correctly refuses the half-state, keeps the previous config, and logs
+loudly — nothing breaks, but the change silently does not take effect.
+
 Screens (ARCHITECTURE §7): sign-in → handle → fire → the Keeper, then the Ledger, a
 thread, compose, flock and settings. The route preview is **text** in M4 — distance, time
 in the air, storms dodged, and the "you could just walk over" line when the two fires are
@@ -336,5 +390,13 @@ for.
 
 ## What is next
 
-- **M5 — The Sky:** map, radar overlay, flight animation, loss screen. The demo milestone.
-- **M6 — Ship prep:** push wiring, settings, icons, EAS build, TestFlight. See ARCHITECTURE §10.
+- **M6 — Ship prep:** push wiring, icons, EAS build, TestFlight. See ARCHITECTURE §10.
+  The non-Apple parts are already done: the nightly [Ledger Report](services/engine/scripts/ledgerReport.ts)
+  (`npm run report`), the [landing page](site/), [PRIVACY.md](PRIVACY.md), font subsetting
+  (`npm run fonts:subset -w apps/mobile`), and the spectator-link schema.
+- **v2.0 — the sun**, implemented and shipped behind flags that default off. See
+  [MECHANICS-V2.md](MECHANICS-V2.md) §6.2 for the beta flag-flip sequence.
+- **v2.1 — waiting at towers**, deferred until beta measures the size of the FIFO gap
+  (REDTEAM F40).
+- [SCENARIOS.md](SCENARIOS.md) holds the sky-scenario backlog — what the weather could do
+  next, and which ideas have survived a red-team.

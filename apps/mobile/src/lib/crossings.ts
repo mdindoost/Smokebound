@@ -22,6 +22,7 @@ import { cellCenter, isNight, towerNameFor } from '@smoke/shared';
 import type { CellId } from '@smoke/shared';
 
 import type { SegmentEta } from './flight';
+import { sunNow } from './devSun';
 
 export interface Crossing {
   at: string;
@@ -44,7 +45,7 @@ export function crossingsAlong(
   for (const segment of segments) {
     const at = new Date(segment.eta);
     if (Number.isNaN(at.getTime())) continue;
-    const night = isNight(at, cellCenter(segment.cell), twilightElevationDeg);
+    const night = isNight(sunNow(at), cellCenter(segment.cell), twilightElevationDeg);
 
     if (previous !== null && night !== previous && confirmedSet.has(segment.cell)) {
       const where = towerNameFor(segment.cell);
