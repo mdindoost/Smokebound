@@ -9,6 +9,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import { Body, Button, Card, Display, Field, Screen, Small } from '../src/design/components';
+import { looksLikePhone, normalizePhone, prettyPhone } from '../src/lib/phone';
 import { useSession } from '../src/lib/session';
 
 export default function SignIn() {
@@ -23,7 +24,7 @@ export default function SignIn() {
     setBusy(true);
     setError(null);
     try {
-      await gateway.signInWithPhone(phone.trim());
+      await gateway.signInWithPhone(normalizePhone(phone));
       setSent(true);
     } catch (err) {
       setError((err as Error).message);
@@ -36,7 +37,7 @@ export default function SignIn() {
     setBusy(true);
     setError(null);
     try {
-      await gateway.verifyPhoneOtp(phone.trim(), code.trim());
+      await gateway.verifyPhoneOtp(normalizePhone(phone), code.trim());
       await refresh();
       router.replace('/');
     } catch (err) {
@@ -58,7 +59,7 @@ export default function SignIn() {
           <>
             <Field
               label="Phone number"
-              placeholder="+1 555 010 1234"
+              placeholder="+1 800 555 0123"
               autoComplete="tel"
               keyboardType="phone-pad"
               value={phone}
@@ -69,7 +70,7 @@ export default function SignIn() {
               label="Send me a code"
               onPress={() => void requestCode()}
               loading={busy}
-              disabled={phone.trim().length < 8}
+              disabled={!looksLikePhone(phone)}
             />
           </>
         ) : (
@@ -82,7 +83,7 @@ export default function SignIn() {
               value={code}
               onChangeText={setCode}
               error={error}
-              hint={`Sent to ${phone.trim()}`}
+              hint={`Sent to ${prettyPhone(phone)}`}
             />
             <Button
               label="Light the fire"

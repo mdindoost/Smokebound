@@ -22,6 +22,7 @@ import { formatDistance, formatDuration, formatEta, formatSince, formatWalk } fr
 import { countGraphemes, overCap } from '../src/lib/graphemes';
 import { HANDLE_MAX, displayHandle, validateHandle } from '../src/lib/handle';
 import { cellFromCoordinates } from '../src/lib/fireCell';
+import { looksLikePhone, normalizePhone, prettyPhone } from '../src/lib/phone';
 import { displayText, isWindDamaged, toConversations, toThreadMessage } from '../src/lib/mapping';
 import type { ProfileView, ThreadMessageView } from '../src/lib/gateway';
 import type { MessageRow } from '../src/lib/mapping';
@@ -318,5 +319,33 @@ describe('row → view mapping', () => {
       () => THEM,
     );
     expect(conversations).toEqual([]);
+  });
+});
+
+describe('phone numbers', () => {
+  it('sends one canonical shape, however it was typed', () => {
+    for (const typed of [
+      '+18005550123',
+      '+1 800 555 0123',
+      '1-800-555-0123',
+      '(800) 555-0123',
+      '800 555 0123',
+    ]) {
+      expect(normalizePhone(typed), typed).toBe('+18005550123');
+    }
+  });
+
+  it('leaves a country code alone when one was given', () => {
+    expect(normalizePhone('+44 20 7946 0958')).toBe('+442079460958');
+  });
+
+  it('knows when there is not enough of a number yet', () => {
+    expect(looksLikePhone('')).toBe(false);
+    expect(looksLikePhone('+1 800')).toBe(false);
+    expect(looksLikePhone('800 555 0123')).toBe(true);
+  });
+
+  it('reads a number back the way a person would say it', () => {
+    expect(prettyPhone('18005550123')).toBe('+1 800 555 0123');
   });
 });
