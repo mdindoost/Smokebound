@@ -55,6 +55,21 @@ export const homeLine = (cell: string | null | undefined): string => {
   return name === null ? 'fire on unnamed ground' : `fire near ${name}`;
 };
 
+/**
+ * Who the arrival is *for*.
+ *
+ * "Arrives" reads as a fact about the message, which is fine on a screen the
+ * message owns — but the person reading it is standing at one end of the flight,
+ * and which end changes what the word means. On a signal you sent, arrival is
+ * something that happens to *them*; on one flying toward you, it happens to you.
+ * The screen already knows the direction — it titles itself "Your signal" or
+ * "Their signal" — so the label has no excuse for being vague.
+ */
+export const arrivalLabel = (direction: 'out' | 'in', delivered: boolean): string => {
+  if (direction === 'out') return delivered ? 'They received it' : 'They receive it';
+  return delivered ? 'Reached you' : 'Reaches you';
+};
+
 export const stateBlurb = (state: string, awaitingConfirmation = false): string => {
   if (awaitingConfirmation && state === 'IN_FLIGHT') {
     return 'Over the far tower now. Waiting for word that it was read.';
@@ -131,9 +146,10 @@ export function routeSummary(input: RouteSummaryInput, now: Date = new Date()): 
   // beforehand is what made the preview wait for weather it did not have.
   const lines = [
     `${formatDistance(input.distanceKm)} · ${formatDuration(input.totalHours ?? 0)} in the air`,
+    // A preview is always the sender's screen: they are deciding whether to send.
     input.etaBandPhrase != null && input.etaBandPhrase !== ''
-      ? `Arrives in ${input.etaBandPhrase}`
-      : `Arrives ${formatEta(input.eta, now)}`,
+      ? `They receive it in ${input.etaBandPhrase}`
+      : `They receive it ${formatEta(input.eta, now)}`,
   ];
 
   if (input.stormsAvoided > 0) {

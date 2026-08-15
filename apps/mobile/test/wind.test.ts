@@ -9,7 +9,7 @@
 import { alongTrackWind, compassPoint, windRelation } from '@smoke/shared';
 import { describe, expect, it } from 'vitest';
 
-import { homeLine } from '../src/lib/copy';
+import { arrivalLabel, homeLine } from '../src/lib/copy';
 import { routeWindSummary, windReading } from '../src/lib/wind';
 import type { CellWeatherView } from '../src/lib/gateway';
 
@@ -107,5 +107,25 @@ describe('homeLine', () => {
 
   it('is honest about ground it cannot name', () => {
     expect(homeLine(null)).toBe('fire not yet lit');
+  });
+});
+
+describe('arrivalLabel', () => {
+  it('tells the sender it reaches them, not that it arrives', () => {
+    // "Arrives" is a fact about the message; the reader is standing at one end
+    // of the flight, and which end changes what the word means.
+    expect(arrivalLabel('out', false)).toBe('They receive it');
+    expect(arrivalLabel('out', true)).toBe('They received it');
+  });
+
+  it('tells the recipient it reaches them', () => {
+    expect(arrivalLabel('in', false)).toBe('Reaches you');
+    expect(arrivalLabel('in', true)).toBe('Reached you');
+  });
+
+  it('never says the same thing to both parties', () => {
+    for (const delivered of [true, false]) {
+      expect(arrivalLabel('out', delivered)).not.toBe(arrivalLabel('in', delivered));
+    }
   });
 });

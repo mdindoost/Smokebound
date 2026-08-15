@@ -146,7 +146,8 @@ export default function Sky() {
               <Small tone="faint">
                 {message.state === 'STRANDED'
                   ? 'Sheltering at the edge of a storm.'
-                  : `Arrives ${formatEta(message.eta, now)}`}
+                  : // The Sky shows only what you sent, so the arrival is theirs.
+                    `They receive it ${formatEta(message.eta, now)}`}
               </Small>
             </Pressable>
           ))}

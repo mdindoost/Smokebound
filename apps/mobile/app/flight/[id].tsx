@@ -32,7 +32,7 @@ import { RouteLine, SmokeMarker, TowerMark, UnknownWeatherMark } from '../../src
 import { MapToggle } from '../../src/map/MapToggle';
 import { thinTowers } from '../../src/map/towerDensity';
 import { SkyPanel } from '../../src/map/SkyPanel';
-import { stateBlurb, stateLabel } from '../../src/lib/copy';
+import { arrivalLabel, stateBlurb, stateLabel } from '../../src/lib/copy';
 import { formatDistance, formatEta, formatSince } from '../../src/lib/format';
 import { confirmedCells, flightAt, regionFor } from '../../src/lib/flight';
 import { windReading } from '../../src/lib/wind';
@@ -165,7 +165,9 @@ export default function Flight() {
           <Mono>{formatDistance(distanceKm)}</Mono>
         </Row>
         <Row style={{ justifyContent: 'space-between' }}>
-          <Small tone="faint">{message.state === 'DELIVERED' ? 'Arrived' : 'Arrives'}</Small>
+          <Small tone="faint">
+            {arrivalLabel(message.direction, message.state === 'DELIVERED')}
+          </Small>
           <Mono>
             {message.state === 'DELIVERED'
               ? formatEta(message.deliveredAt, now)
