@@ -30,6 +30,7 @@ import { sky } from '../../src/design/sky';
 import { spacing, stateColor } from '../../src/design/tokens';
 import { RouteLine, SmokeMarker, TowerMark, UnknownWeatherMark } from '../../src/map/SmokeTrail';
 import { MapToggle } from '../../src/map/MapToggle';
+import { thinTowers } from '../../src/map/towerDensity';
 import { SkyPanel } from '../../src/map/SkyPanel';
 import { stateBlurb, stateLabel } from '../../src/lib/copy';
 import { formatDistance, formatEta, formatSince } from '../../src/lib/format';
@@ -87,6 +88,9 @@ export default function Flight() {
   );
 
   const towers = useMemo(() => towersAlong(message?.route ?? []), [message?.route]);
+  // The map gets a thinned set; the Ledger below keeps every one. A sixty-cell
+  // route draws sixty marks that tile into a solid band over the route line.
+  const mapTowers = useMemo(() => thinTowers(towers), [towers]);
   // What the smoke is flying through at this moment — the question the flight
   // view should always answer without being asked.
   const conditions = useMemo(
@@ -137,7 +141,7 @@ export default function Flight() {
       <SkyPanel region={regionFor(route.length > 0 ? route : [message.originCell])} radar={radar} height={340}>
         <RouteLine flown={snapshot.flown} ahead={snapshot.ahead} />
         {showTowers &&
-          towers.map((tower) => <TowerMark key={tower.cell} cell={tower.cell} name={tower.name} />)}
+          mapTowers.map((tower) => <TowerMark key={tower.cell} cell={tower.cell} name={tower.name} />)}
         {unknownCells.map((cell) => (
           <UnknownWeatherMark key={cell} cell={cell} />
         ))}

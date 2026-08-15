@@ -212,11 +212,26 @@ The ruling generalises: **the interface may never assert what it has not
 verified.** The dead radar layer that drew a NOAA attribution bar over a 404 was
 the same failure wearing different clothes.
 
+### V8 — A map is a rectangle; a timeline is a scroll (ruled, M5.5)
+
+Tower density was left open in M5 because a two-cell route to the Keeper cannot
+answer it. The first sixty-cell route settled it immediately: sixty marks across
+eleven hundred miles of screen tile edge to edge into a beige band lying on top
+of the route line they were meant to decorate.
+
+**The map thins its towers; the Ledger keeps all of them.** A scroll can afford
+every tower the smoke passed. A fixed rectangle cannot, and a mark that hides
+the route is worse than no mark.
+
+Thinning is **evenly spaced, both ends always kept** — not "the largest towns".
+The marks exist to show the *path*, and dropping the middle of the country
+because Ohio has no big city would draw a line that appears to teleport.
+
 ## 5. What is closed, and what is open
 
-**Closed** (V1–V7 above): the sky-panel model, the contained weather family, the bundled
+**Closed** (V1–V8 above): the sky-panel model, the contained weather family, the bundled
 serif, elegiac state semantics, per-platform darkness, towns-for-fires, and the rule that
-the app never narrates past the engine.
+the app never narrates past the engine, and map marks thin while timelines do not.
 
 **Open, for whoever ships M6:**
 
