@@ -73,13 +73,27 @@ export const darkMapStyle = [
 ] as const;
 
 /**
- * NWS precipitation tiles (ARCHITECTURE §1, §7.1).
+ * NWS precipitation imagery (ARCHITECTURE §1, §7.1).
  *
- * The base reflectivity mosaic from the NWS ArcGIS services, in the ArcGIS tile
- * scheme (`{z}/{y}/{x}` — row before column, unlike XYZ). Free, keyless, and the
- * same imagery the forecast pages use.
+ * The CONUS base-reflectivity mosaic, served as WMS by NOAA/NCEP's GeoServer.
+ * Free, keyless, and the same product the forecast pages draw.
+ *
+ * This was an ArcGIS `/tile/{z}/{y}/{x}` URL until it was tested against the
+ * live service and every request came back 404. Two things were wrong, and the
+ * second is why the first could not simply be patched: the `_time` endpoint is
+ * an ImageServer rather than a MapServer, and its sibling MapServer reports
+ * `singleFusedMapCache: false` — it has no tile cache at all, so no XYZ-shaped
+ * URL was ever going to work. WMS asks for a bbox instead of a tile index, so
+ * it needs no cache. Verified: 200 image/png, with returns over ~5% of CONUS.
+ *
+ * The placeholders are filled in by react-native-maps' <WMSTile>. Bounds arrive
+ * in EPSG:3857, which the service advertises, so the imagery lands square on a
+ * web-mercator map with no reprojection.
  */
-export const RADAR_TILE_URL =
-  'https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity_time/MapServer/tile/{z}/{y}/{x}';
+export const RADAR_WMS_URL =
+  'https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows' +
+  '?service=WMS&version=1.1.1&request=GetMap&layers=conus_bref_qcd' +
+  '&bbox={minX},{minY},{maxX},{maxY}&width={width}&height={height}' +
+  '&srs=EPSG:3857&format=image/png&transparent=true';
 
 export const RADAR_ATTRIBUTION = 'Radar: NOAA / National Weather Service';

@@ -13,11 +13,11 @@
  */
 
 import { StyleSheet, View } from 'react-native';
-import MapView, { UrlTile } from 'react-native-maps';
+import MapView, { WMSTile } from 'react-native-maps';
 import type { MapViewProps, Region } from 'react-native-maps';
 import type { ReactNode } from 'react';
 
-import { RADAR_ATTRIBUTION, RADAR_OPACITY, RADAR_TILE_URL, darkMapStyle, sky } from '../design/sky';
+import { RADAR_ATTRIBUTION, RADAR_OPACITY, RADAR_WMS_URL, darkMapStyle, sky } from '../design/sky';
 import { Caption } from '../design/components';
 import { radii, spacing } from '../design/tokens';
 
@@ -65,8 +65,8 @@ export function SkyPanel({
       >
         {radar && (
           // V2: radar keeps its own hues but sits under everything, dimmed.
-          <UrlTile
-            urlTemplate={RADAR_TILE_URL}
+          <WMSTile
+            urlTemplate={RADAR_WMS_URL}
             zIndex={-1}
             opacity={RADAR_OPACITY}
             maximumZ={12}

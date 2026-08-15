@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { RADAR_OPACITY, RADAR_TILE_URL, sky } from '../src/design/sky';
+import { RADAR_OPACITY, RADAR_WMS_URL, sky } from '../src/design/sky';
 import { colors, palette, stateColor } from '../src/design/tokens';
 
 /** Relative luminance, for "is this dark?" questions. */
@@ -59,9 +59,15 @@ describe('V2: weather is contained', () => {
   });
 
   it('takes radar from NOAA, keylessly', () => {
-    expect(RADAR_TILE_URL).toContain('weather.noaa.gov');
-    expect(RADAR_TILE_URL).toContain('{z}/{y}/{x}'); // ArcGIS tile order
-    expect(RADAR_TILE_URL).not.toMatch(/key=|token=/);
+    expect(RADAR_WMS_URL).toContain('noaa.gov');
+    expect(RADAR_WMS_URL).not.toMatch(/key=|token=/); // keyless, or it stops working silently
+    // The bbox placeholders <WMSTile> substitutes. A tile-indexed `{z}/{y}/{x}`
+    // URL here would be the bug that shipped a radar layer over a dead service.
+    for (const token of ['{minX}', '{minY}', '{maxX}', '{maxY}', '{width}', '{height}']) {
+      expect(RADAR_WMS_URL).toContain(token);
+    }
+    expect(RADAR_WMS_URL).not.toContain('{z}');
+    expect(RADAR_WMS_URL).toContain('srs=EPSG:3857'); // matches the map projection
   });
 
   it('leaves the smoke as the brightest thing on the panel', () => {

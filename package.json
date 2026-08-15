@@ -16,7 +16,8 @@
     "test": "npm run test --workspace packages/shared && npm run test --workspace services/engine && npm run test --workspace apps/mobile",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace services/engine",
-    "db:seed": "npm run seed --workspace services/engine"
+    "db:seed": "npm run seed --workspace services/engine",
+    "check:endpoints": "node scripts/check-endpoints.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
