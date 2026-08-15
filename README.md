@@ -67,7 +67,7 @@ statements the suite proves rather than assumes. No Docker, no database server n
 2. Grab the connection string: **Project Settings → Database → Connection string → URI**.
    Use the direct connection rather than the pooler for DDL.
 3. ```bash
-   cp .env.example .env      # then fill in DATABASE_URL
+   cp .env.example .env      # DATABASE_URL + PREVIEW_TOKEN_SECRET
    set -a && source .env && set +a
    npm run db:migrate        # applies supabase/migrations in order, idempotently
    npm run db:seed           # fills mechanics_config from MECHANICS.md
@@ -265,7 +265,7 @@ react-native-maps and the default providers so it runs inside Expo Go. On it:
 ## apps/mobile
 
 ```bash
-cp .env.example .env      # EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY
+cp apps/mobile/.env.example apps/mobile/.env   # Expo reads .env from the app dir
 npm start --workspace apps/mobile
 ```
 
