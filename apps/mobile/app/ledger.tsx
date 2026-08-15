@@ -24,7 +24,7 @@ import {
   Title,
 } from '../src/design/components';
 import { spacing, stateColor } from '../src/design/tokens';
-import { stateLabel } from '../src/lib/copy';
+import { stateLabel, homeLine } from '../src/lib/copy';
 import { formatSince } from '../src/lib/format';
 import { useSession } from '../src/lib/session';
 import type { ConversationView } from '../src/lib/gateway';
@@ -59,7 +59,7 @@ export default function Ledger() {
 
       {profile !== null && (
         <Small tone="faint">
-          Signing as @{profile.handle} · fire in {profile.homeCell ?? '—'}
+          Signing as @{profile.handle} · {homeLine(profile.homeCell)}
         </Small>
       )}
 

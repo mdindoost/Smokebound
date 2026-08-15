@@ -12,7 +12,8 @@
  * more than we would like.
  */
 
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 import MapView, { WMSTile } from 'react-native-maps';
 import type { MapViewProps, Region } from 'react-native-maps';
 import type { ReactNode } from 'react';
@@ -25,6 +26,13 @@ export interface SkyPanelProps extends Omit<MapViewProps, 'style'> {
   region: Region;
   /** NWS precipitation tiles (ARCHITECTURE §1). */
   radar?: boolean;
+  /**
+   * A stable description of *what* the region frames — the route, the set of
+   * signals in the air. The camera re-frames when this changes and stays put
+   * when it does not, so a poll that returns the same flight never steals the
+   * map back from someone who panned it. Omit to leave the camera alone.
+   */
+  regionKey?: string;
   height?: number;
   rounded?: boolean;
   children?: ReactNode;
@@ -33,11 +41,30 @@ export interface SkyPanelProps extends Omit<MapViewProps, 'style'> {
 export function SkyPanel({
   region,
   radar = false,
+  regionKey,
   height = 320,
   rounded = true,
   children,
   ...props
 }: SkyPanelProps) {
+  const map = useRef<MapView | null>(null);
+
+  // Re-frame only when what we are framing actually changes — a new signal, a
+  // delivery, a reroute. Animating on every poll would yank the map out from
+  // under anyone who had panned it to look at the weather.
+  useEffect(() => {
+    if (regionKey === undefined) return;
+    map.current?.animateToRegion(
+      {
+        latitude: region.latitude,
+        longitude: region.longitude,
+        latitudeDelta: region.latitudeDelta,
+        longitudeDelta: region.longitudeDelta,
+      },
+      600,
+    );
+  }, [regionKey]);
+
   return (
     <View
       style={{
@@ -51,10 +78,17 @@ export function SkyPanel({
     >
       <MapView
         {...props}
+        ref={map}
         style={StyleSheet.absoluteFill}
         initialRegion={region}
+        // The two halves of DESIGN.md V1, one per platform. `customMapStyle` is
+        // a Google Maps feature and Apple Maps ignores it in silence, which is
+        // why the panel shipped stock-light on iOS: the style was never refused,
+        // it was never read. `userInterfaceStyle` is the Apple Maps equivalent
+        // and is itself a no-op on Android. Both are needed; neither is enough.
         customMapStyle={darkMapStyle as unknown as MapViewProps['customMapStyle']}
-        mapType="mutedStandard"
+        userInterfaceStyle="dark"
+        mapType={Platform.OS === 'ios' ? 'mutedStandard' : 'standard'}
         showsPointsOfInterest={false}
         showsTraffic={false}
         showsBuildings={false}

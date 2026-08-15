@@ -28,6 +28,7 @@ export interface MessageRow {
   dest_cell: string;
   route: string[] | null;
   segment_etas: unknown;
+  current_leg: number | null;
   departed_at: string | null;
   eta: string | null;
   delivered_at: string | null;
@@ -88,6 +89,7 @@ export function toThreadMessage(
     destCell: row.dest_cell,
     route: Array.isArray(row.route) ? row.route : null,
     segmentEtas: Array.isArray(row.segment_etas) ? (row.segment_etas as SegmentEta[]) : null,
+    currentLeg: typeof row.current_leg === 'number' ? row.current_leg : null,
     garbleCount: garbleCount(row.garble_events),
     events: events
       .filter((event) => event.message_id === row.id)

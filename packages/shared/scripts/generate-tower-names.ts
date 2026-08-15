@@ -89,6 +89,10 @@ function nearestPlace(lat: number, lng: number): Place | null {
 // ---------------------------------------------------------------------------
 
 const names: string[] = [];
+const points: [number, number][] = [];
+// Keyed by name *and* coordinates, not name alone: there are a dozen
+// Springfields, and giving them one shared entry would put the Illinois tower's
+// pin in Massachusetts. Names may repeat in the table; places may not.
 const nameIndex = new Map<string, number>();
 const indices: string[] = [];
 let named = 0;
@@ -106,11 +110,13 @@ for (let row = 0; row < GRID.rows; row++) {
       indices.push('...');
       continue;
     }
-    let index = nameIndex.get(place.name);
+    const key = `${place.name}@${place.lat.toFixed(4)},${place.lng.toFixed(4)}`;
+    let index = nameIndex.get(key);
     if (index === undefined) {
       index = names.length;
       names.push(place.name);
-      nameIndex.set(place.name, index);
+      points.push([round4(place.lat), round4(place.lng)]);
+      nameIndex.set(key, index);
     }
     indices.push(index.toString(36).padStart(3, '0'));
     named++;
@@ -135,11 +141,28 @@ const file = `/**
 
 export const TOWER_NAMES: readonly string[] = ${JSON.stringify(names)};
 
+/**
+ * Where each tower actually stands: [lat, lng] of the place itself, parallel to
+ * TOWER_NAMES.
+ *
+ * A cell centre is a point of arithmetic, not geography — the centroid of the
+ * cell covering Little Falls, NJ lands in the Cedar Grove Reservoir, so a fire
+ * drawn there appears to burn on open water. These are the real coordinates, for
+ * drawing only. Distance, ETA and routing stay on cell centres; see
+ * towerPoint() in towers.ts for the guard that keeps a pin inside its own cell.
+ */
+export const TOWER_POINTS: readonly (readonly [number, number])[] =
+${JSON.stringify(points)};
+
 export const TOWER_INDEX =
 ${chunk(indices.join(''), 96)
   .map((line) => `  '${line}'`)
   .join(' +\n')};
 `;
+
+function round4(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
 
 function chunk(value: string, size: number): string[] {
   const out: string[] = [];

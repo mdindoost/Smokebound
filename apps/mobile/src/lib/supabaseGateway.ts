@@ -30,7 +30,7 @@ import type { EngineTransport } from './transport';
 
 const MESSAGE_COLUMNS =
   'id, sender, recipient, body, body_delivered, state, origin_cell, dest_cell, ' +
-  'route, segment_etas, departed_at, eta, delivered_at, stranded_cell, lost_at, lost_cell, ' +
+  'route, segment_etas, current_leg, departed_at, eta, delivered_at, stranded_cell, lost_at, lost_cell, ' +
   'lost_reason, garble_events, created_at';
 
 export class SupabaseGateway implements DataGateway {
@@ -298,7 +298,7 @@ export class SupabaseGateway implements DataGateway {
 
     const { data } = await this.supabase
       .from('weather_cells')
-      .select('cell, condition, impassable, weather_unknown, wind_mph')
+      .select('cell, condition, impassable, weather_unknown, wind_mph, wind_dir')
       .in('cell', cells as string[]);
 
     for (const row of (data ?? []) as {
@@ -307,6 +307,7 @@ export class SupabaseGateway implements DataGateway {
       impassable: boolean;
       weather_unknown: boolean;
       wind_mph: number | null;
+      wind_dir: number | null;
     }[]) {
       out.set(row.cell, {
         cell: row.cell,
@@ -314,6 +315,7 @@ export class SupabaseGateway implements DataGateway {
         impassable: row.impassable,
         weatherUnknown: row.weather_unknown,
         windMph: row.wind_mph,
+        windDir: row.wind_dir,
       });
     }
     return out;

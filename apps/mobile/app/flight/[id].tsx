@@ -10,7 +10,7 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { cellCenter, haversineKm, towerPhrase, towersAlong } from '@smoke/shared';
+import { cellCenter, haversineKm, towerNameFor, towerPhrase, towersAlong } from '@smoke/shared';
 
 import {
   Banner,
@@ -29,10 +29,12 @@ import {
 import { sky } from '../../src/design/sky';
 import { spacing, stateColor } from '../../src/design/tokens';
 import { RouteLine, SmokeMarker, TowerMark, UnknownWeatherMark } from '../../src/map/SmokeTrail';
+import { MapToggle } from '../../src/map/MapToggle';
 import { SkyPanel } from '../../src/map/SkyPanel';
 import { stateBlurb, stateLabel } from '../../src/lib/copy';
 import { formatDistance, formatEta, formatSince } from '../../src/lib/format';
-import { flightAt, regionFor } from '../../src/lib/flight';
+import { confirmedCells, flightAt, regionFor } from '../../src/lib/flight';
+import { windReading } from '../../src/lib/wind';
 import { useSession } from '../../src/lib/session';
 import type { CellWeatherView, ThreadMessageView } from '../../src/lib/gateway';
 
@@ -85,6 +87,15 @@ export default function Flight() {
   );
 
   const towers = useMemo(() => towersAlong(message?.route ?? []), [message?.route]);
+  // What the smoke is flying through at this moment — the question the flight
+  // view should always answer without being asked.
+  const conditions = useMemo(
+    () =>
+      message?.state === 'IN_FLIGHT' || message?.state === 'STRANDED'
+        ? windReading(message.route ?? [], snapshot.leg, weather)
+        : null,
+    [message?.state, message?.route, snapshot.leg, weather],
+  );
   const unknownCells = useMemo(
     () => (message?.route ?? []).filter((cell) => weather.get(cell)?.weatherUnknown === true),
     [message?.route, weather],
@@ -105,7 +116,16 @@ export default function Flight() {
 
   const route = message.route ?? [];
   const distanceKm = haversineKm(cellCenter(message.originCell), cellCenter(message.destCell));
-  const passed = towers.filter((tower) => snapshot.flown.includes(tower.cell));
+  // The departure event already says "The smoke rose from the Little Falls
+  // tower"; listing "passed the Little Falls tower" underneath it is the same
+  // fact told twice, in a weaker voice. And the list is drawn from the engine's
+  // `current_leg`, not from interpolation — a tower we merely calculate the
+  // smoke to be past has not been passed.
+  const confirmed = confirmedCells(route, message.currentLeg, message.state, message.departedAt);
+  const departureTower = towerNameFor(message.originCell);
+  const passed = towers.filter(
+    (tower) => confirmed.includes(tower.cell) && tower.name !== departureTower,
+  );
 
   return (
     <Screen>
@@ -125,17 +145,16 @@ export default function Flight() {
       </SkyPanel>
 
       <Row style={{ justifyContent: 'space-between' }}>
-        <Pressable accessibilityRole="button" onPress={() => setRadar((on) => !on)}>
-          <Caption tone="accent">{radar ? 'Radar on' : 'Radar off'}</Caption>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => setShowTowers((on) => !on)}>
-          <Caption tone="accent">{showTowers ? 'Towers on' : 'Towers off'}</Caption>
-        </Pressable>
+        <MapToggle label="Radar" on={radar} onPress={() => setRadar((v) => !v)} />
+        <MapToggle label="Towers" on={showTowers} onPress={() => setShowTowers((v) => !v)} />
       </Row>
 
       <Card>
         <Body>{message.body ?? ''}</Body>
-        <Small tone="faint">{stateBlurb(message.state)}</Small>
+        <Small tone="faint">{stateBlurb(message.state, snapshot.awaitingConfirmation)}</Small>
+        {conditions !== null && (
+          <Small tone={conditions.adverse ? 'soft' : 'faint'}>{conditions.line}</Small>
+        )}
         <Divider />
         <Row style={{ justifyContent: 'space-between' }}>
           <Small tone="faint">Distance</Small>
@@ -151,7 +170,12 @@ export default function Flight() {
         </Row>
         <Row style={{ justifyContent: 'space-between' }}>
           <Small tone="faint">Progress</Small>
-          <Mono>{Math.round(snapshot.progress * 100)}%</Mono>
+          {/* "100%" beside an IN FLIGHT chip is the client overruling the
+              server. Once the arithmetic runs out, the honest reading is that
+              we are waiting, not that we are done. */}
+          <Mono>
+            {snapshot.awaitingConfirmation ? 'Arriving' : `${Math.round(snapshot.progress * 100)}%`}
+          </Mono>
         </Row>
         {unknownCells.length > 0 && (
           <Small tone="faint">

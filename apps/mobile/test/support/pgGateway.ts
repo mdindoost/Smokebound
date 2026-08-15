@@ -215,8 +215,9 @@ export class PgGateway implements DataGateway {
       impassable: boolean;
       weather_unknown: boolean;
       wind_mph: number | null;
+      wind_dir: number | null;
     }>(
-      `select cell, condition, impassable, weather_unknown, wind_mph
+      `select cell, condition, impassable, weather_unknown, wind_mph, wind_dir
          from public.weather_cells where cell = any($1::text[])`,
       [cells as string[]],
     );
@@ -227,6 +228,7 @@ export class PgGateway implements DataGateway {
         impassable: row.impassable,
         weatherUnknown: row.weather_unknown,
         windMph: row.wind_mph,
+        windDir: row.wind_dir,
       });
     }
     return out;

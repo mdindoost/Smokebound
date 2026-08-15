@@ -167,10 +167,56 @@ prose and later translated.
 
 ---
 
+### V5 — The dark panel is two decisions, not one (ruled, M5.5)
+
+**V1 shipped as light stock Apple Maps on every iPhone.** `customMapStyle` is a
+Google Maps feature; Apple Maps ignores it without complaint, so the style was
+never refused — it was never read. The panel now sets `customMapStyle` *and*
+`userInterfaceStyle="dark"`, one per platform, each a no-op on the other.
+
+The ruling: **a cross-platform visual decision is not implemented until it is
+implemented twice.** A scrim over the map would have been the wrong fix — it
+dims the radar and the route along with the basemap, which is the dark *theme*
+V1 exists to refuse.
+
+### V6 — Fires stand in towns, weather sits in cells (ruled, M5.5)
+
+A cell centre is arithmetic. The centroid of the cell covering Little Falls, NJ
+lands in the Cedar Grove Reservoir, and the first fire drawn on a real phone
+appeared to burn on open water.
+
+Fires, towers and route endpoints draw on **the town the cell is named after**,
+guarded so a pin can never leave its own cell. Storm and unforecast marks stay
+on **the cell centre** — weather belongs to the whole 50 km cell and has no
+address, and moving it onto a townsite would claim a precision the forecast does
+not have.
+
+**Drawing only.** Every distance, ETA and route decision still measures centre to
+centre. A pin moved a kilometre for the sake of dry land must never move a
+number.
+
+### V7 — The app does not narrate past the engine (ruled, M5.5)
+
+With the engine stopped for ninety minutes, the flight view showed `Progress
+100%`, drew the whole route in ember, and listed both towers as passed — while
+the only authority in the system still said `IN_FLIGHT` with `delivered_at`
+null.
+
+Interpolation is cosmetic and is *allowed* to run ahead. Narration is not.
+Progress reads **Arriving** rather than 100% until the engine confirms; the list
+of towers passed comes from `current_leg`, not from arithmetic; and copy in that
+gap admits the wait — *"Over the far tower now. Waiting for word that it was
+read."*
+
+The ruling generalises: **the interface may never assert what it has not
+verified.** The dead radar layer that drew a NOAA attribution bar over a 404 was
+the same failure wearing different clothes.
+
 ## 5. What is closed, and what is open
 
-**Closed** (V1–V4 above): the sky-panel model, the contained weather family, the bundled
-serif, elegiac state semantics.
+**Closed** (V1–V7 above): the sky-panel model, the contained weather family, the bundled
+serif, elegiac state semantics, per-platform darkness, towns-for-fires, and the rule that
+the app never narrates past the engine.
 
 **Open, for whoever ships M6:**
 

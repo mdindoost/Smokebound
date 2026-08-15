@@ -11,6 +11,8 @@
  * English until a market justifies otherwise).
  */
 
+import { towerNameFor } from '@smoke/shared';
+import type { CellId } from '@smoke/shared';
 import { formatDistance, formatDuration, formatEta, formatWalk } from './format';
 
 export const stateLabel = (state: string): string => {
@@ -30,7 +32,33 @@ export const stateLabel = (state: string): string => {
   }
 };
 
-export const stateBlurb = (state: string): string => {
+/**
+ * What the smoke is doing, in one line.
+ *
+ * `awaitingConfirmation` is the case where our arithmetic has run out before
+ * the engine's word arrives (see FlightSnapshot). Saying "on its way" then is
+ * wrong in one direction and "it arrived" is wrong in the worse one, so the
+ * copy admits the wait instead. An app about smoke can afford to be unsure.
+ */
+/**
+ * Where someone's fire is, in words a person would use.
+ *
+ * `r033c054` is a coordinate in our grid and means nothing to anyone outside
+ * this codebase — it was on the Flock screen and the Ledger, the two places the
+ * machinery showed through an app that otherwise talks about hills and towers.
+ * Named cells become their town; the handful without a name stay honest rather
+ * than inventing one.
+ */
+export const homeLine = (cell: string | null | undefined): string => {
+  if (cell === null || cell === undefined || cell === '') return 'fire not yet lit';
+  const name = towerNameFor(cell as CellId);
+  return name === null ? 'fire on unnamed ground' : `fire near ${name}`;
+};
+
+export const stateBlurb = (state: string, awaitingConfirmation = false): string => {
+  if (awaitingConfirmation && state === 'IN_FLIGHT') {
+    return 'Over the far tower now. Waiting for word that it was read.';
+  }
   switch (state) {
     case 'TRANSMITTING':
       return 'The fire is puffing your message out, one breath at a time.';

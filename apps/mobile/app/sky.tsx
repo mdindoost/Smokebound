@@ -29,6 +29,7 @@ import {
 import { sky } from '../src/design/sky';
 import { spacing, stateColor } from '../src/design/tokens';
 import { RouteLine, SmokeMarker } from '../src/map/SmokeTrail';
+import { MapToggle } from '../src/map/MapToggle';
 import { SkyPanel } from '../src/map/SkyPanel';
 import { stateLabel } from '../src/lib/copy';
 import { formatEta } from '../src/lib/format';
@@ -72,21 +73,24 @@ export default function Sky() {
     [messages],
   );
 
-  const region = useMemo(() => {
+  const framed = useMemo(() => {
     const cells = mine.flatMap((message) => message.route ?? [message.originCell]);
-    return regionFor(cells.length > 0 ? cells : profile?.homeCell ? [profile.homeCell] : []);
+    // With nothing in the air, frame the user's own fire rather than the whole
+    // country — an empty continent is a worse answer than "here is your hill".
+    return cells.length > 0 ? cells : profile?.homeCell ? [profile.homeCell] : [];
   }, [mine, profile?.homeCell]);
+
+  const region = useMemo(() => regionFor(framed), [framed]);
+  const regionKey = useMemo(() => framed.join(','), [framed]);
 
   return (
     <Screen>
       <Row style={{ justifyContent: 'space-between' }}>
         <Title>The Sky</Title>
-        <Pressable accessibilityRole="button" onPress={() => setRadar((on) => !on)}>
-          <Caption tone="accent">{radar ? 'Radar on' : 'Radar off'}</Caption>
-        </Pressable>
+        <MapToggle label="Radar" on={radar} onPress={() => setRadar((v) => !v)} />
       </Row>
 
-      <SkyPanel region={region} radar={radar} height={360}>
+      <SkyPanel region={region} regionKey={regionKey} radar={radar} height={360}>
         {mine.map((message) => {
           const snapshot = flightAt(
             {

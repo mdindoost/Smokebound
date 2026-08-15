@@ -12,6 +12,7 @@
  *     and it waits.
  */
 
+import { towerNameFor } from '@smoke/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
@@ -33,6 +34,7 @@ import { colors, spacing } from '../src/design/tokens';
 import { SkyPanel } from '../src/map/SkyPanel';
 import { RouteLine, StormMark } from '../src/map/SmokeTrail';
 import { regionFor } from '../src/lib/flight';
+import { routeWindSummary } from '../src/lib/wind';
 import { etaWarningCopy, proximityCopy, routeSummary } from '../src/lib/copy';
 import { formatTransmission } from '../src/lib/format';
 import { countGraphemes } from '../src/lib/graphemes';
@@ -49,6 +51,9 @@ export default function Compose() {
   const [body, setBody] = useState('');
   const [charCap, setCharCap] = useState<number | null>(null);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
+  // What the sky is doing along the way, so the decision to send is made with
+  // the weather in view rather than only the ETA it produced.
+  const [routeWeather, setRouteWeather] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,10 +74,17 @@ export default function Compose() {
     setBusy(true);
     setError(null);
     try {
-      setPreview(await gateway.preview(selected, body));
+      const quoted = await gateway.preview(selected, body);
+      setPreview(quoted);
+      setRouteWeather(
+        quoted.route === null
+          ? null
+          : routeWindSummary(quoted.route, await gateway.cellWeather(quoted.route)),
+      );
     } catch (err) {
       setError((err as Error).message);
       setPreview(null);
+      setRouteWeather(null);
     } finally {
       setBusy(false);
     }
@@ -197,10 +209,16 @@ export default function Compose() {
                 <Body key={line}>{line}</Body>
               ))}
 
-              <Mono tone="faint">
-                {preview.originCell} → {preview.destCell}
+              {/* Towers, not coordinates: the sender is deciding whether to
+                  light a fire, and "r037c090 → r036c090" tells them nothing
+                  about where their words are going. */}
+              <Small tone="faint">
+                {towerNameFor(preview.originCell) ?? 'your fire'} →{' '}
+                {towerNameFor(preview.destCell) ?? 'their fire'}
                 {preview.route !== null ? ` · ${preview.route.length} cells` : ''}
-              </Mono>
+              </Small>
+
+              {routeWeather !== null && <Small tone="faint">{routeWeather}</Small>}
 
               {proximity?.headline !== null && proximity !== null && (
                 <Banner tone="info">

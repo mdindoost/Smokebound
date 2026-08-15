@@ -59,6 +59,12 @@ export interface ThreadMessageView {
   /** Server truth: the committed route, and the ETA of each waypoint. */
   route: string[] | null;
   segmentEtas: SegmentEta[] | null;
+  /**
+   * The last waypoint the *engine* has confirmed. Client interpolation runs
+   * ahead of this between ticks, and must not be narrated as though it were
+   * fact — see `confirmedLeg` in the flight view.
+   */
+  currentLeg: number | null;
   garbleCount: number;
   events: MessageEventView[];
 }
@@ -78,6 +84,8 @@ export interface CellWeatherView {
   impassable: boolean;
   weatherUnknown: boolean;
   windMph: number | null;
+  /** Degrees the wind blows *from*, meteorological convention. */
+  windDir: number | null;
 }
 
 export interface MechanicsView {

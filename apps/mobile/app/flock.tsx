@@ -22,6 +22,7 @@ import {
 } from '../src/design/components';
 import { spacing } from '../src/design/tokens';
 import { validateHandle } from '../src/lib/handle';
+import { homeLine } from '../src/lib/copy';
 import { useSession } from '../src/lib/session';
 import type { FlockEntry, ProfileView } from '../src/lib/gateway';
 
@@ -171,7 +172,7 @@ export default function Flock() {
                   @{entry.profile.handle}
                   {entry.profile.isSystem === true ? ' · the Keeper' : ''}
                 </Body>
-                <Small tone="faint">fire in {entry.profile.homeCell ?? '—'}</Small>
+                <Small tone="faint">{homeLine(entry.profile.homeCell)}</Small>
               </Pressable>
             </View>
           ))

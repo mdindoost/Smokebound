@@ -12,7 +12,11 @@
 
 import { Marker, Polyline } from 'react-native-maps';
 import { View } from 'react-native';
-import { cellCenter } from '@smoke/shared';
+// Two kinds of point, deliberately. A fire or a tower stands in a *town*, so it
+// draws on the town. Weather belongs to the whole 50 km cell and has no address,
+// so it draws on the centre — moving a storm onto a townsite would claim a
+// precision the forecast does not have.
+import { cellCenter, displayPoint } from '@smoke/shared';
 import type { CellId } from '@smoke/shared';
 
 import { sky } from '../design/sky';
@@ -75,6 +79,7 @@ export function SmokeMarker({
       coordinate={toLatLng(snapshot.position)}
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={false}
+      zIndex={3}
       onPress={onPress}
     >
       <View
@@ -103,21 +108,30 @@ export function SmokeMarker({
   );
 }
 
-/** A beacon tower: a squat trapezoid with a light on top. Cosmetic only. */
+/**
+ * A beacon tower: a squat trapezoid with a light on top. Cosmetic only.
+ *
+ * Drawn on the town rather than the cell centroid, and sized to be findable —
+ * the first pass was 8pt wide, smaller than the smoke's inner ember, and the
+ * destination tower vanished underneath the smoke at the exact moment of
+ * arrival. It sits below the smoke in z-order for the same reason: when the two
+ * do overlap, the fire is the thing you came to see.
+ */
 export function TowerMark({ cell, name }: { cell: CellId; name: string }) {
   return (
     <Marker
-      coordinate={toLatLng(cellCenter(cell))}
-      anchor={{ x: 0.5, y: 0.5 }}
+      coordinate={toLatLng(displayPoint(cell))}
+      anchor={{ x: 0.5, y: 1 }}
       tracksViewChanges={false}
+      zIndex={1}
       title={`the ${name} tower`}
     >
       <View style={{ alignItems: 'center' }}>
         <View
           style={{
-            width: 3,
-            height: 3,
-            borderRadius: 2,
+            width: 5,
+            height: 5,
+            borderRadius: 3,
             backgroundColor: sky.trailGlow,
             marginBottom: 1,
           }}
@@ -126,9 +140,9 @@ export function TowerMark({ cell, name }: { cell: CellId; name: string }) {
           style={{
             width: 0,
             height: 0,
-            borderLeftWidth: 4,
-            borderRightWidth: 4,
-            borderBottomWidth: 7,
+            borderLeftWidth: 7,
+            borderRightWidth: 7,
+            borderBottomWidth: 12,
             borderLeftColor: 'transparent',
             borderRightColor: 'transparent',
             borderBottomColor: sky.tower,
@@ -146,6 +160,7 @@ export function UnknownWeatherMark({ cell }: { cell: CellId }) {
       coordinate={toLatLng(cellCenter(cell))}
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={false}
+      zIndex={0}
       title="weather unknown here"
     >
       <View
@@ -169,6 +184,7 @@ export function StormMark({ cell }: { cell: CellId }) {
       coordinate={toLatLng(cellCenter(cell))}
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={false}
+      zIndex={0}
       title="storm"
     >
       <View

@@ -11,9 +11,9 @@
  * these names are already the vocabulary for them.
  */
 
-import { TOWER_INDEX, TOWER_NAMES } from './generated/towerNames.js';
-import { GRID, parseCellId } from './grid.js';
-import type { CellId } from './types.js';
+import { TOWER_INDEX, TOWER_NAMES, TOWER_POINTS } from './generated/towerNames.js';
+import { GRID, cellCenter, cellId, isInsideGrid, parseCellId } from './grid.js';
+import type { CellId, LatLng } from './types.js';
 
 const WIDTH = 3;
 const NONE = '...';
@@ -57,4 +57,51 @@ export function towersAlong(route: readonly CellId[]): { cell: CellId; name: str
   return out;
 }
 
-export { TOWER_NAMES };
+/** The index into the generated tables for a cell, or null where no tower stands. */
+function towerIndexFor(cell: CellId): number | null {
+  const { row, col } = parseCellId(cell);
+  const at = (row * GRID.cols + col) * WIDTH;
+  const code = TOWER_INDEX.slice(at, at + WIDTH);
+  if (code === NONE) return null;
+  const index = parseInt(code, 36);
+  return Number.isNaN(index) ? null : index;
+}
+
+/**
+ * Where the tower actually stands, when that is a place inside this cell.
+ *
+ * A cell centre is arithmetic, not geography: the centroid of the cell covering
+ * Little Falls, NJ falls in the Cedar Grove Reservoir, and a fire drawn there
+ * looks like it is burning on open water.
+ *
+ * The nearest place to a centroid is not guaranteed to be *in* the cell — near a
+ * coast or a border the closest town can sit one cell over. Returning that point
+ * would let a route's marks drift out of order, so a pin that lands outside its
+ * own cell is refused here and the caller falls back to the centre. Geography
+ * when we have it, arithmetic when we do not.
+ *
+ * **Drawing only.** Distances, ETAs and routing all stay on cell centres; a
+ * pin moved a kilometre for the sake of dry land must never move a number.
+ */
+export function towerPoint(cell: CellId): LatLng | null {
+  const index = towerIndexFor(cell);
+  if (index === null) return null;
+  const point = TOWER_POINTS[index];
+  if (point === undefined) return null;
+
+  const candidate: LatLng = { lat: point[0], lng: point[1] };
+  if (!isInsideGrid(candidate)) return null;
+  return cellId(candidate) === cell ? candidate : null;
+}
+
+/**
+ * Where to draw a fire, a tower or a route endpoint for this cell.
+ *
+ * The town if we know it stands here, the cell centre otherwise. Never null, so
+ * callers cannot accidentally skip a mark.
+ */
+export function displayPoint(cell: CellId): LatLng {
+  return towerPoint(cell) ?? cellCenter(cell);
+}
+
+export { TOWER_NAMES, TOWER_POINTS };

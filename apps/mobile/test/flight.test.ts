@@ -9,7 +9,7 @@
 import { cellCenter, cellId, haversineKm } from '@smoke/shared';
 import { describe, expect, it } from 'vitest';
 
-import { flightAt, pathOf, regionFor } from '../src/lib/flight';
+import { confirmedCells, flightAt, pathOf, regionFor } from '../src/lib/flight';
 import type { FlightInput, SegmentEta } from '../src/lib/flight';
 
 const NEWARK = cellId({ lat: 40.7357, lng: -74.1724 });
@@ -153,9 +153,24 @@ describe('flightAt', () => {
 });
 
 describe('map geometry', () => {
-  it('turns cells into a path', () => {
+  it('turns cells into a path, drawn on towns rather than centroids', () => {
     expect(pathOf(ROUTE)).toHaveLength(ROUTE.length);
-    expect(pathOf(ROUTE)[0]).toEqual(cellCenter(NEWARK));
+
+    // The endpoint is the town the cell is named after, not the arithmetic
+    // centre — a centre that, for the cell covering Little Falls NJ, sits in the
+    // Cedar Grove Reservoir. It stays inside its own cell either way.
+    const first = pathOf(ROUTE)[0]!;
+    expect(cellId(first)).toBe(NEWARK);
+    expect(haversineKm(first, cellCenter(NEWARK))).toBeLessThan(40);
+  });
+
+  it('never lets the drawn path change a quoted distance', () => {
+    // Drawing moved; measuring must not. The engine and every number on screen
+    // measure centre to centre.
+    const drawn = pathOf(ROUTE);
+    const quoted = haversineKm(cellCenter(ROUTE[0]!), cellCenter(ROUTE[ROUTE.length - 1]!));
+    const painted = haversineKm(drawn[0]!, drawn[drawn.length - 1]!);
+    expect(Math.abs(painted - quoted)).toBeLessThan(40);
   });
 
   it('frames a route with air around it', () => {
@@ -177,5 +192,63 @@ describe('map geometry', () => {
     const region = regionFor([NEWARK]);
     expect(region.latitudeDelta).toBeGreaterThan(0);
     expect(region.longitudeDelta).toBeGreaterThan(0);
+  });
+});
+
+describe('not claiming what the engine has not said', () => {
+  // The bug: with the engine stopped for 90 minutes, the flight screen showed
+  // "Progress 100%", drew the whole route in ember, and listed both towers as
+  // passed — while the only authority in the system still said IN_FLIGHT with
+  // delivered_at null. Interpolation is allowed to run ahead. Narration is not.
+
+  const ROUTE_2 = ['r037c090', 'r036c090'];
+  const SEGMENTS: SegmentEta[] = [
+    { leg: 0, cell: 'r037c090', cumulative_hours: 0, eta: '2026-08-15T02:11:00.000Z' },
+    { leg: 1, cell: 'r036c090', cumulative_hours: 1.5, eta: '2026-08-15T03:40:00.000Z' },
+  ];
+  const base: FlightInput = {
+    state: 'IN_FLIGHT',
+    route: ROUTE_2,
+    segmentEtas: SEGMENTS,
+    departedAt: '2026-08-15T02:11:00.000Z',
+    eta: '2026-08-15T03:40:00.000Z',
+    strandedCell: null,
+    lostCell: null,
+  };
+
+  it('flags a flight past its ETA that the engine has not confirmed', () => {
+    const snapshot = flightAt(base, new Date('2026-08-15T03:42:00.000Z'));
+    expect(snapshot.awaitingConfirmation).toBe(true);
+    expect(snapshot.arrived).toBe(false);
+  });
+
+  it('does not flag a flight still genuinely in the air', () => {
+    const snapshot = flightAt(base, new Date('2026-08-15T03:00:00.000Z'));
+    expect(snapshot.awaitingConfirmation).toBe(false);
+    expect(snapshot.progress).toBeLessThan(1);
+  });
+
+  it('does not flag a delivered flight — that one really did arrive', () => {
+    const snapshot = flightAt(
+      { ...base, state: 'DELIVERED' },
+      new Date('2026-08-15T03:42:00.000Z'),
+    );
+    expect(snapshot.awaitingConfirmation).toBe(false);
+    expect(snapshot.arrived).toBe(true);
+  });
+
+  it('confirms only the legs the engine has committed to', () => {
+    // Interpolation says both cells are behind us; current_leg says otherwise.
+    const snapshot = flightAt(base, new Date('2026-08-15T03:42:00.000Z'));
+    expect(snapshot.flown).toEqual(ROUTE_2);
+    expect(confirmedCells(ROUTE_2, 0, 'IN_FLIGHT', base.departedAt)).toEqual(['r037c090']);
+  });
+
+  it('confirms the whole route once delivered', () => {
+    expect(confirmedCells(ROUTE_2, 0, 'DELIVERED', base.departedAt)).toEqual(ROUTE_2);
+  });
+
+  it('confirms nothing before the smoke has left', () => {
+    expect(confirmedCells(ROUTE_2, null, 'TRANSMITTING', null)).toEqual([]);
   });
 });

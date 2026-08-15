@@ -8,7 +8,7 @@
  * multipliers in the first place.
  */
 
-import { cellCenter, haversineKm, initialBearingDeg } from '@smoke/shared';
+import { alongTrackWind, cellCenter, haversineKm, initialBearingDeg } from '@smoke/shared';
 import type { CellId, MechanicsConfig } from '@smoke/shared';
 
 import type { WeatherSnapshot } from '../weather/types.js';
@@ -42,9 +42,9 @@ export function windMultiplier(
 ): number {
   if (!Number.isFinite(windMph) || windMph <= 0) return 1;
 
-  const blowingToward = (windDirFromDeg + 180) % 360;
-  const angle = ((travelBearingDeg - blowingToward + 540) % 360) - 180;
-  const alongTrackMph = windMph * Math.cos((angle * Math.PI) / 180);
+  // Shared with the app, so the sentence on the flight screen and the penalty
+  // in the router can never describe different weather.
+  const alongTrackMph = alongTrackWind(windMph, windDirFromDeg, travelBearingDeg);
 
   if (alongTrackMph >= 0) {
     return Math.max(

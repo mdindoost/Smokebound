@@ -5,6 +5,7 @@
  * reviewer looking for guideline 1.2 compliance should find it without hunting.
  */
 
+import { towerNameFor } from '@smoke/shared';
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import { Linking } from 'react-native';
@@ -60,7 +61,7 @@ export default function Settings() {
         <Body>@{profile?.handle ?? '—'}</Body>
         <Row style={{ justifyContent: 'space-between' }}>
           <Small tone="faint">Your fire</Small>
-          <Mono>{profile?.homeCell ?? '—'}</Mono>
+          <Body>{towerNameFor(profile?.homeCell ?? '') ?? 'unnamed ground'}</Body>
         </Row>
         <Button label="Move my fire" variant="secondary" onPress={() => void moveFire()} loading={busy} />
         {note !== null && <Small tone="faint">{note}</Small>}

@@ -223,6 +223,7 @@ function row(patch: Partial<MessageRow> = {}): MessageRow {
     body: 'HELLO',
     body_delivered: null,
     state: 'IN_FLIGHT',
+    current_leg: 0,
     origin_cell: 'r037c090',
     dest_cell: 'r039c066',
     route: null,

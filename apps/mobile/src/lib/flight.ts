@@ -8,7 +8,7 @@
  * dot is in the wrong place for a few seconds.
  */
 
-import { cellCenter, interpolateGreatCircle } from '@smoke/shared';
+import { cellCenter, displayPoint, interpolateGreatCircle } from '@smoke/shared';
 import type { CellId, LatLng } from '@smoke/shared';
 
 export interface SegmentEta {
@@ -32,6 +32,18 @@ export interface FlightSnapshot {
   /** True while it is still puffing at the origin (MECHANICS §3). */
   transmitting: boolean;
   arrived: boolean;
+  /**
+   * The smoke has reached the destination by our arithmetic, and the engine has
+   * not said so yet.
+   *
+   * This is the gap the whole file lives in. Interpolation is cosmetic, so it
+   * happily runs to the end of the route on a schedule the server may not have
+   * caught up with — and if the engine is slow, or stopped, it stays there
+   * looking finished. A screen that reads "100%" beside a state chip saying
+   * IN FLIGHT is not a rounding artefact; it is the client claiming an outcome
+   * it has no authority over. Callers must render this as waiting, not as done.
+   */
+  awaitingConfirmation: boolean;
 }
 
 export interface FlightInput {
@@ -63,6 +75,7 @@ export function flightAt(input: FlightInput, now: Date): FlightSnapshot {
     ahead: route,
     transmitting: false,
     arrived: false,
+    awaitingConfirmation: false,
   };
 
   if (route.length === 0) return empty;
@@ -82,6 +95,7 @@ export function flightAt(input: FlightInput, now: Date): FlightSnapshot {
       ahead: [],
       transmitting: false,
       arrived: true,
+      awaitingConfirmation: false,
     };
   }
   if (input.state === 'STRANDED') {
@@ -95,6 +109,7 @@ export function flightAt(input: FlightInput, now: Date): FlightSnapshot {
       ahead: route.slice(index),
       transmitting: false,
       arrived: false,
+      awaitingConfirmation: false,
     };
   }
 
@@ -111,8 +126,12 @@ export function flightAt(input: FlightInput, now: Date): FlightSnapshot {
   const time = now.getTime();
   const last = segments[segments.length - 1]!;
   if (time >= at(last.eta)) {
-    // Past its ETA but not yet marked delivered: the cron runs every minute, and
-    // showing it parked at the destination beats showing it in the wrong place.
+    // Past its ETA but not yet marked delivered. Parking it at the destination
+    // beats drawing it somewhere it is not — but the flag goes up, because the
+    // difference between "arrived" and "should have arrived" belongs to the
+    // engine, and it has not spoken. Normally this lasts under a minute
+    // (routing.delivery_check_interval_minutes); if the engine is down it lasts
+    // as long as the engine is down, and the screen should say so either way.
     return {
       position: cellCenter(last.cell),
       leg: last.leg,
@@ -121,6 +140,7 @@ export function flightAt(input: FlightInput, now: Date): FlightSnapshot {
       ahead: [],
       transmitting: false,
       arrived: false,
+      awaitingConfirmation: true,
     };
   }
 
@@ -147,12 +167,41 @@ export function flightAt(input: FlightInput, now: Date): FlightSnapshot {
     ahead: route.slice(from.leg),
     transmitting: false,
     arrived: false,
+    awaitingConfirmation: false,
   };
 }
 
-/** Map cells to coordinates for a polyline. */
+/**
+ * The waypoints the *engine* has confirmed the smoke is past.
+ *
+ * `FlightSnapshot.flown` is interpolated and always at least as advanced; this
+ * is the subset a timeline is allowed to state as fact. On a delivered message
+ * that is the whole route; otherwise it is whatever `current_leg` says, and
+ * nothing at all before departure.
+ */
+export function confirmedCells(
+  route: readonly CellId[],
+  currentLeg: number | null,
+  state: string,
+  departedAt: string | null,
+): CellId[] {
+  if (route.length === 0) return [];
+  if (state === 'DELIVERED') return [...route];
+  if (departedAt === null) return [];
+  const leg = currentLeg ?? 0;
+  return route.slice(0, Math.min(route.length, Math.max(0, leg) + 1));
+}
+
+/**
+ * Map cells to coordinates for a polyline.
+ *
+ * Uses the town a cell is named after where one stands inside it, so a route
+ * runs between places rather than between arithmetic centroids that can land in
+ * reservoirs and bays. The shift is a kilometre or two and moves the drawn line
+ * only — `haversineKm` on cell centres still owns every distance we quote.
+ */
 export function pathOf(cells: readonly CellId[]): LatLng[] {
-  return cells.map((cell) => cellCenter(cell));
+  return cells.map((cell) => displayPoint(cell));
 }
 
 /** A region that frames a route with a little air around it. */
