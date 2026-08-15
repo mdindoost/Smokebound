@@ -68,7 +68,6 @@ statements the suite proves rather than assumes. No Docker, no database server n
    Use the direct connection rather than the pooler for DDL.
 3. ```bash
    cp .env.example .env      # DATABASE_URL + PREVIEW_TOKEN_SECRET
-   set -a && source .env && set +a
    npm run db:migrate        # applies supabase/migrations in order, idempotently
    npm run db:seed           # fills mechanics_config from MECHANICS.md
    npm run seed -w services/engine -- --keeper   # adds The Keeper + its flavour lines
@@ -207,8 +206,12 @@ weather fields.
 ### Running the engine
 
 ```bash
-DATABASE_URL=...  PREVIEW_TOKEN_SECRET=...  npm start -w services/engine
+npm start -w services/engine
 ```
+
+Configuration comes from the environment, and the engine reads `.env` in the repo
+root when it starts — a real environment (Fly, Railway, systemd) always wins over
+a file left in a checkout.
 
 | Variable | Meaning |
 |---|---|
@@ -276,10 +279,8 @@ The app is linked to the existing Expo project (`mdindoosts-team/smokebound`), s
 
 The map needs a device — Expo Go on an iPhone is enough, no dev client required.
 
-1. Point the engine at your Supabase project and start it:
-   `DATABASE_URL=… PREVIEW_TOKEN_SECRET=… npm start -w services/engine`
-   (transport `table` by default, so the phone reaches it through the database and the
-   engine needs no inbound port).
+1. Start the engine: `npm start -w services/engine` (transport `table` by default, so
+   the phone reaches it through the database and the engine needs no inbound port).
 2. Speed the sky up so a flight fits in a coffee break — 32 km/h becomes 3,200:
    `update mechanics_config set value = '3200' where key = 'speed.base_kmh';`
    Reset it to `32` afterwards; nothing needs a redeploy either way.

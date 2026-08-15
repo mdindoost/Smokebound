@@ -13,6 +13,7 @@ import { Client } from 'pg';
 
 import { pgExecutor } from './db/executor.js';
 import type { SqlExecutor } from './db/executor.js';
+import { loadEnvFiles, requireEnv } from './engine/env.js';
 import { createEngineContext } from './engine/context.js';
 import { startCrons } from './crons/scheduler.js';
 import { KEEPER_ID } from './messages/keeper.js';
@@ -20,12 +21,6 @@ import { WeatherCache } from './weather/cache.js';
 import { HttpNwsClient } from './weather/nws.js';
 import { SqlWeatherStore } from './weather/store.js';
 import { parseTransportMode, startTransports } from './transport/index.js';
-
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required`);
-  return value;
-}
 
 async function loadConfig(db: SqlExecutor): Promise<MechanicsConfig> {
   const { rows } = await db.query<{ key: string; value: unknown }>(
@@ -39,7 +34,9 @@ async function main(): Promise<void> {
     console.log(`[${new Date().toISOString()}] ${message}`);
   };
 
-  const client = new Client({ connectionString: required('DATABASE_URL') });
+  for (const file of loadEnvFiles()) log(`loaded ${file}`);
+
+  const client = new Client({ connectionString: requireEnv('DATABASE_URL') });
   await client.connect();
   const db = pgExecutor(client);
 
@@ -57,7 +54,7 @@ async function main(): Promise<void> {
     db,
     config,
     weather,
-    previewSecret: required('PREVIEW_TOKEN_SECRET'),
+    previewSecret: requireEnv('PREVIEW_TOKEN_SECRET'),
     keeperId: KEEPER_ID,
     log,
   });
@@ -68,7 +65,7 @@ async function main(): Promise<void> {
     http:
       mode === 'http' || mode === 'both'
         ? {
-            jwtSecret: required('SUPABASE_JWT_SECRET'),
+            jwtSecret: requireEnv('SUPABASE_JWT_SECRET'),
             port: Number(process.env['PORT'] ?? 8787),
             host: process.env['HOST'] ?? '0.0.0.0',
           }

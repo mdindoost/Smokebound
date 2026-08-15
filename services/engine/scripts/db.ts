@@ -9,6 +9,7 @@ import { Client } from 'pg';
 
 import { pgExecutor } from '../src/db/executor.js';
 import type { SqlExecutor } from '../src/db/executor.js';
+import { requireEnv } from '../src/engine/env.js';
 
 export interface Connection {
   db: SqlExecutor;
@@ -17,14 +18,7 @@ export interface Connection {
 }
 
 export async function connect(): Promise<Connection> {
-  const url = process.env['DATABASE_URL'];
-  if (!url) {
-    throw new Error(
-      'DATABASE_URL is not set.\n' +
-        'Supabase: Project Settings → Database → Connection string → URI\n' +
-        'Example: DATABASE_URL="postgresql://postgres:...@db.<ref>.supabase.co:5432/postgres"',
-    );
-  }
+  const url = requireEnv('DATABASE_URL');
 
   const client = new Client({
     connectionString: url,
