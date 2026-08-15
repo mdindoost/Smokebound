@@ -36,11 +36,13 @@ import {
   UnknownWeatherMark,
 } from '../../src/map/SmokeTrail';
 import { MapToggle } from '../../src/map/MapToggle';
-import { thinTowers } from '../../src/map/towerDensity';
+import { marksForZoom, thinTowers } from '../../src/map/towerDensity';
+import { BreathingEmber } from '../../src/map/BreathingEmber';
+import { emberRadiusFor } from '../../src/design/motion';
 import { SkyPanel } from '../../src/map/SkyPanel';
 import { arrivalLabel, stateBlurb, stateLabel } from '../../src/lib/copy';
 import { formatDistance, formatEta, formatSince } from '../../src/lib/format';
-import { confirmedCells, flightAt, regionFor } from '../../src/lib/flight';
+import { confirmedCells, flightAt, pathOf, regionFor } from '../../src/lib/flight';
 import { crossingsAlong } from '../../src/lib/crossings';
 import { windReading } from '../../src/lib/wind';
 import { regimeAt, regimeInCell, regimeLine, terminatorPath } from '../../src/map/NightLayer';
@@ -58,6 +60,7 @@ export default function Flight() {
   const [radar, setRadar] = useState(true);
   const [mechanics, setMechanics] = useState<MechanicsView | null>(null);
   const [showTowers, setShowTowers] = useState(true);
+  const [zoom, setZoom] = useState<number | null>(null);
   const [now, setNow] = useState(() => new Date());
 
   const load = useCallback(async () => {
@@ -105,7 +108,7 @@ export default function Flight() {
   const towers = useMemo(() => towersAlong(message?.route ?? []), [message?.route]);
   // The map gets a thinned set; the Ledger below keeps every one. A sixty-cell
   // route draws sixty marks that tile into a solid band over the route line.
-  const mapTowers = useMemo(() => thinTowers(towers), [towers]);
+  const mapTowers = useMemo(() => thinTowers(towers, marksForZoom(zoom)), [towers, zoom]);
   // What the smoke is flying through at this moment — the question the flight
   // view should always answer without being asked.
   // What the tower is burning where the smoke is, right now (REDTEAM F32).
@@ -197,7 +200,14 @@ export default function Flight() {
         <StateChip label={stateLabel(message.state)} color={stateColor(message.state)} />
       </Row>
 
-      <SkyPanel region={regionFor(route.length > 0 ? route : [message.originCell])} radar={radar} height={340}>
+      <SkyPanel
+        region={panelRegion}
+        regionKey={route.join(',')}
+        fitTo={pathOf(route.length > 0 ? route : [message.originCell])}
+        onZoomChange={setZoom}
+        radar={radar}
+        height={340}
+      >
         {terminator.length > 1 && <TerminatorLine points={terminator} />}
         <RouteLine flown={snapshot.flown} ahead={snapshot.ahead} />
         {showTowers &&
@@ -206,6 +216,7 @@ export default function Flight() {
               key={tower.cell}
               cell={tower.cell}
               name={tower.name}
+              passed={snapshot.flown.includes(tower.cell)}
               lit={
                 mechanics !== null &&
                 regimeInCell(now, tower.cell, mechanics.twilightElevationDeg, mechanics.nightVisuals) ===
@@ -216,6 +227,13 @@ export default function Flight() {
         {unknownCells.map((cell) => (
           <UnknownWeatherMark key={cell} cell={cell} />
         ))}
+        {message.state === 'IN_FLIGHT' && (
+          <BreathingEmber
+            at={snapshot.position}
+            baseRadiusMeters={emberRadiusFor(zoom)}
+            regime={regime}
+          />
+        )}
         <SmokeMarker snapshot={snapshot} state={message.state} regime={regime} />
       </SkyPanel>
 

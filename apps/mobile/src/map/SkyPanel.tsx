@@ -17,6 +17,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import MapView, { WMSTile } from 'react-native-maps';
 import type { MapViewProps, Region } from 'react-native-maps';
 import type { ReactNode } from 'react';
+import type { LatLng } from '@smoke/shared';
 
 import { RADAR_ATTRIBUTION, RADAR_OPACITY, RADAR_WMS_URL, darkMapStyle, sky } from '../design/sky';
 import { Caption } from '../design/components';
@@ -33,6 +34,19 @@ export interface SkyPanelProps extends Omit<MapViewProps, 'style'> {
    * map back from someone who panned it. Omit to leave the camera alone.
    */
   regionKey?: string;
+  /**
+   * Coordinates the panel must show in full.
+   *
+   * Preferred over `region` wherever the thing being framed is a route.
+   * `region` is a centre plus a span, and a span computed from a bounding box
+   * does not account for the panel's aspect ratio or for the marks that hang
+   * off the line — tower triangles, the smoke's halo, the radar attribution bar
+   * along the bottom. `fitToCoordinates` takes explicit edge padding in points
+   * and is the only way to promise the route is never clipped.
+   */
+  fitTo?: readonly LatLng[];
+  /** Reported after any camera move, so callers can gate detail on zoom. */
+  onZoomChange?: (longitudeDelta: number) => void;
   height?: number;
   rounded?: boolean;
   children?: ReactNode;
@@ -42,6 +56,8 @@ export function SkyPanel({
   region,
   radar = false,
   regionKey,
+  fitTo,
+  onZoomChange,
   height = 320,
   rounded = true,
   children,
@@ -54,6 +70,21 @@ export function SkyPanel({
   // under anyone who had panned it to look at the weather.
   useEffect(() => {
     if (regionKey === undefined) return;
+
+    // Fit the actual geometry where we have it. Room is left along the bottom
+    // for the radar attribution bar, which otherwise sits on top of whatever
+    // the route does in its last few miles.
+    if (fitTo !== undefined && fitTo.length > 1) {
+      map.current?.fitToCoordinates(
+        fitTo.map((point) => ({ latitude: point.lat, longitude: point.lng })),
+        {
+          edgePadding: { top: 44, right: 44, bottom: 72, left: 44 },
+          animated: true,
+        },
+      );
+      return;
+    }
+
     map.current?.animateToRegion(
       {
         latitude: region.latitude,
@@ -81,6 +112,7 @@ export function SkyPanel({
         ref={map}
         style={StyleSheet.absoluteFill}
         initialRegion={region}
+        onRegionChangeComplete={(next) => onZoomChange?.(next.longitudeDelta)}
         // The two halves of DESIGN.md V1, one per platform. `customMapStyle` is
         // a Google Maps feature and Apple Maps ignores it in silence, which is
         // why the panel shipped stock-light on iOS: the style was never refused,

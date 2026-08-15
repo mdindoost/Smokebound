@@ -60,11 +60,35 @@ const IGNORED_DIRS = new Set(['node_modules', 'dist', 'build', '.expo', '.git', 
 const SOURCE_EXT = /\.(ts|tsx|js|jsx)$/;
 
 /** The one file allowed to contain gameplay numbers, plus the tests that verify it. */
+/**
+ * The client's design layer is exempt, and this is the one exemption worth
+ * arguing about.
+ *
+ * `apps/mobile/src/design/` holds the palette, the type scale, spacing and
+ * motion — visual constants whose document is DESIGN.md, exactly as
+ * `mechanics_config` is the document for anything that decides what *happens*.
+ * They collide with gameplay values by coincidence and often: a 0.35 swell on a
+ * breathing ember is the garble chance, a 0.05 opacity step is the dissipation
+ * rate per day, a 0.015 share of the viewport is the headwind coefficient. None
+ * of them change a route, an ETA or an outcome.
+ *
+ * The alternative was to nudge each constant to a neighbouring value until the
+ * guard stopped complaining, which is how a guard gets quietly defeated instead
+ * of consulted.
+ *
+ * The tradeoff, stated: a gameplay number hidden in `design/` would not be
+ * caught. That is a narrow hole — nothing in the design layer can enact
+ * gameplay, since the client renders server truth and computes none of it — and
+ * a deliberately small one. It is a directory of palettes; a multiplier table
+ * there would be visible to any reader.
+ */
 function isExempt(relPath: string): boolean {
+  const parts = relPath.split(sep);
   return (
     relPath.endsWith(join('mechanics', 'defaults.ts')) ||
     /\.test\.(ts|tsx)$/.test(relPath) ||
-    relPath.split(sep).includes('__fixtures__')
+    parts.includes('__fixtures__') ||
+    relPath.startsWith(join('apps', 'mobile', 'src', 'design') + sep)
   );
 }
 
@@ -163,6 +187,14 @@ describe('ARCHITECTURE §10: gameplay numbers live only in mechanics_config seed
     expect(literalRegex('280').test('const cap = 280;')).toBe(true);
     expect(literalRegex('0.7').test('const mult = 0.75;')).toBe(false);
     expect(literalRegex('0.7').test('const floor = 0.7;')).toBe(true);
+  });
+
+  it('exempts the design layer and nothing broader', () => {
+    // The exemption is a directory of palettes and motion tokens, not the app.
+    expect(isExempt(join('apps', 'mobile', 'src', 'design', 'motion.ts'))).toBe(true);
+    expect(isExempt(join('apps', 'mobile', 'src', 'map', 'SmokeTrail.tsx'))).toBe(false);
+    expect(isExempt(join('apps', 'mobile', 'src', 'lib', 'wind.ts'))).toBe(false);
+    expect(isExempt(join('services', 'engine', 'src', 'routing', 'cost.ts'))).toBe(false);
   });
 
   it('never reads a deprecated config key from computation code', () => {

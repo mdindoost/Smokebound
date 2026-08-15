@@ -154,10 +154,13 @@ export function TowerMark({
   cell,
   name,
   lit = false,
+  passed = false,
 }: {
   cell: CellId;
   name: string;
   lit?: boolean;
+  /** The smoke is already past this one. Behind reads brighter than ahead. */
+  passed?: boolean;
 }) {
   return (
     <Marker
@@ -167,17 +170,20 @@ export function TowerMark({
       zIndex={1}
       title={`the ${name} tower`}
     >
-      <View style={{ alignItems: 'center' }}>
+      {/* Towers behind the smoke are part of the story and read brighter; ones
+          still ahead are faint, so the eye follows the ember rather than
+          counting fenceposts. */}
+      <View style={{ alignItems: 'center', opacity: passed ? 0.95 : 0.45 }}>
         <View
           style={{
-            width: 5,
-            height: 5,
-            borderRadius: 3,
+            width: 4,
+            height: 4,
+            borderRadius: 2,
             // Lit towers carry a warm lamp; unlit ones are stone. Still never
             // `trailGlow` — a landmark may be visible without competing with the
             // signal it exists to frame (DESIGN.md V2).
             backgroundColor: lit ? sky.tower : sky.towerLight,
-            opacity: lit ? 1 : 0.75,
+            opacity: lit ? 1 : 0.7,
             marginBottom: 1,
           }}
         />
@@ -185,9 +191,9 @@ export function TowerMark({
           style={{
             width: 0,
             height: 0,
-            borderLeftWidth: 7,
-            borderRightWidth: 7,
-            borderBottomWidth: 12,
+            borderLeftWidth: 5,
+            borderRightWidth: 5,
+            borderBottomWidth: 9,
             borderLeftColor: 'transparent',
             borderRightColor: 'transparent',
             borderBottomColor: sky.tower,

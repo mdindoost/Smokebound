@@ -24,11 +24,28 @@ export interface Tower {
 /**
  * Roughly how many marks fit across a panel before they touch.
  *
- * A tower mark is about 14pt wide and the panel is ~340pt, so a dozen leaves
- * real gaps between them at any zoom the route is framed at. Not a gameplay
- * number — it changes nothing but how crowded a rectangle looks.
+ * Twelve was still too many. On a continental route they read as a picket fence
+ * — a dozen identical triangles evenly spaced, which is a *pattern*, and a
+ * pattern outweighs the single ember it is supposed to frame. The ember has to
+ * be the hero of the panel; everything else is scenery.
  */
-export const MAX_TOWER_MARKS = 12;
+export const MAX_TOWER_MARKS = 7;
+
+/**
+ * How many marks a given zoom can carry.
+ *
+ * `longitudeDelta` is the panel's span in degrees — small when zoomed in, large
+ * when the whole country is on screen. Zoomed right in there is room for every
+ * tower and each one is a real landmark you could point at; zoomed out they are
+ * decoration and should thin toward nothing.
+ */
+export function marksForZoom(longitudeDelta: number | null): number {
+  if (longitudeDelta === null) return MAX_TOWER_MARKS;
+  if (longitudeDelta < 1) return 12; // a city or two: labels are legible
+  if (longitudeDelta < 4) return 9;
+  if (longitudeDelta < 12) return MAX_TOWER_MARKS;
+  return 5; // a continent: endpoints and a few waypoints, nothing more
+}
 
 /**
  * Evenly spaced towers, both ends kept.
@@ -37,7 +54,7 @@ export const MAX_TOWER_MARKS = 12;
  * show the *path*, and dropping the middle of the country because Ohio has no
  * large city would draw a line that looks like it teleports.
  */
-export function thinTowers(towers: readonly Tower[], max = MAX_TOWER_MARKS): Tower[] {
+export function thinTowers(towers: readonly Tower[], max: number = MAX_TOWER_MARKS): Tower[] {
   if (towers.length <= max) return [...towers];
   if (max <= 2) return [towers[0]!, towers[towers.length - 1]!];
 

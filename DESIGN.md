@@ -227,17 +227,56 @@ Thinning is **evenly spaced, both ends always kept** — not "the largest towns"
 The marks exist to show the *path*, and dropping the middle of the country
 because Ohio has no big city would draw a line that appears to teleport.
 
+### V9 — The ember breathes, and nothing else does (ruled, M5.6)
+
+M5 left motion open and said *"no motion is a legitimate answer for an app about
+waiting."* R23 answers it for exactly one thing.
+
+The smoke marker carries a slow **3-second** swell and fade — radius and opacity
+only. It never changes position, colour or shape, because position is server
+truth and the one thing motion must not do here is imply movement the engine has
+not confirmed (V7).
+
+**A map whose only moving object is the message is a map that tells you where to
+look.** That is the whole argument, and it is why the answer stays "one thing":
+a second animated element would make the first one ordinary.
+
+Two constraints the implementation is shaped by:
+
+- **It is a map overlay, not a marker.** Markers render with
+  `tracksViewChanges={false}`, which snapshots their contents once — an animated
+  view inside one paints exactly once and then freezes, silently. The breath is
+  a `Circle`, which takes live props.
+- **Reduce-motion means still, not slow.** Someone who asked the system to stop
+  moving things asked for that, not for a compromise.
+
+### V10 — Where visual constants live (ruled, M5.6)
+
+`apps/mobile/src/design/` is the home for the palette, type scale, spacing and
+motion, and **DESIGN.md is their document** — exactly as `mechanics_config` is
+the document for anything that decides what happens.
+
+The no-hardcoded-numbers guard exempts that directory, because visual constants
+collide with gameplay values by coincidence and often: a 0.35 swell is the
+garble chance, a 0.05 opacity step is the dissipation rate, a 0.015 share of the
+viewport is the headwind coefficient. The alternative was to nudge each constant
+until the guard stopped complaining, which is how a guard gets defeated rather
+than consulted.
+
+**The tradeoff, stated plainly:** a gameplay number hidden in `design/` would not
+be caught. Narrow, and deliberately so — nothing in the design layer can enact
+gameplay, and a multiplier table in a directory of palettes would be visible to
+any reader.
+
 ## 5. What is closed, and what is open
 
-**Closed** (V1–V8 above): the sky-panel model, the contained weather family, the bundled
+**Closed** (V1–V10 above): the sky-panel model, the contained weather family, the bundled
 serif, elegiac state semantics, per-platform darkness, towns-for-fires, and the rule that
-the app never narrates past the engine, and map marks thin while timelines do not.
+the app never narrates past the engine, map marks thin while timelines do not, the ember is the only thing that moves, and visual constants live in the design layer.
 
 **Open, for whoever ships M6:**
 
 - App icon and splash. The icon wants to be a mark, not a scene — ember on parchment.
 - A true dark mode for the whole app (the sub-palette is structured for it; nothing else
   is decided).
-- Motion. M5 animates one thing — the smoke's position along a route. Whether transitions
-  elsewhere get motion at all is undecided, and "no motion" is a legitimate answer for an
-  app about waiting.
+- ~~Motion.~~ **Closed by V9**: the ember breathes, and nothing else does.

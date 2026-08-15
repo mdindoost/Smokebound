@@ -34,7 +34,7 @@ import {
 import { colors, spacing } from '../src/design/tokens';
 import { SkyPanel } from '../src/map/SkyPanel';
 import { RouteLine, StormMark } from '../src/map/SmokeTrail';
-import { regionFor } from '../src/lib/flight';
+import { pathOf, regionFor } from '../src/lib/flight';
 import { routeWindSummary } from '../src/lib/wind';
 import { etaWarningCopy, proximityCopy, routeSummary } from '../src/lib/copy';
 import { formatTransmission } from '../src/lib/format';
@@ -203,6 +203,8 @@ export default function Compose() {
             {preview.noRoute ? null : (
               <SkyPanel
                 region={regionFor(preview.route ?? [preview.originCell, preview.destCell])}
+                regionKey={(preview.route ?? [preview.originCell, preview.destCell]).join(',')}
+                fitTo={pathOf(preview.route ?? [preview.originCell, preview.destCell])}
                 radar
                 height={240}
               >

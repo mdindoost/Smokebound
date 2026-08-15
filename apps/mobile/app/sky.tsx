@@ -34,7 +34,7 @@ import { MapToggle } from '../src/map/MapToggle';
 import { SkyPanel } from '../src/map/SkyPanel';
 import { stateLabel } from '../src/lib/copy';
 import { formatEta } from '../src/lib/format';
-import { flightAt, regionFor } from '../src/lib/flight';
+import { flightAt, pathOf, regionFor } from '../src/lib/flight';
 import { useSession } from '../src/lib/session';
 import type { ThreadMessageView, MechanicsView } from '../src/lib/gateway';
 
@@ -107,7 +107,13 @@ export default function Sky() {
         <MapToggle label="Radar" on={radar} onPress={() => setRadar((v) => !v)} />
       </Row>
 
-      <SkyPanel region={region} regionKey={regionKey} radar={radar} height={360}>
+      <SkyPanel
+        region={region}
+        regionKey={regionKey}
+        fitTo={pathOf(framed)}
+        radar={radar}
+        height={360}
+      >
         {terminator.length > 1 && <TerminatorLine points={terminator} />}
         {mine.map((message) => {
           const snapshot = flightAt(
