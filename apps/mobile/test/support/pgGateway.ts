@@ -331,6 +331,8 @@ export class PgGateway implements DataGateway {
       nightVisuals: flag('night.visuals_enabled'),
       nightMechanics: flag('night.enabled'),
       twilightElevationDeg: number('night.twilight_elevation_deg'),
+      walkSuggestMaxMinutes: number('proximity.walk_suggest_max_minutes'),
+      walkSuggestMinDeliveryMinutes: number('proximity.walk_suggest_min_delivery_minutes'),
     };
   }
 

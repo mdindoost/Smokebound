@@ -107,6 +107,10 @@ export interface MechanicsView {
   nightMechanics: boolean;
   /** Solar elevation below which the map draws night. −6° = civil twilight. */
   twilightElevationDeg: number;
+  /** Longest walk worth suggesting instead of sending (MECHANICS §7.1). */
+  walkSuggestMaxMinutes: number;
+  /** Shortest delivery that makes walking worth mentioning at all. */
+  walkSuggestMinDeliveryMinutes: number;
 }
 
 /** Everything the app can do. Implemented for Supabase, and for tests. */

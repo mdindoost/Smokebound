@@ -111,26 +111,65 @@ describe('copy', () => {
     expect(stateBlurb('STRANDED')).toMatch(/storm/i);
   });
 
-  it('makes the proximity joke only when it applies (MECHANICS §7.1)', () => {
-    const near = proximityCopy({ sameCell: true, adjacent: false, distanceKm: 3, walkMinutes: 40 });
-    expect(near.headline).toMatch(/walk over/);
-    expect(near.footnote).toBe('On foot: 40 min.');
+  describe('the walk-over line (MECHANICS §7.1)', () => {
+    // Both conditions, not just "walking wins": the walk must be genuinely
+    // short AND the smoke genuinely slow. On a device the old rule offered a
+    // 10.4-hour walk against a 2.5-hour flight, because "adjacent" spans a
+    // 50 km cell and can be a full day on foot.
+    const LIMITS = { maxWalkMinutes: 60, minDeliveryMinutes: 60 };
 
-    const adjacent = proximityCopy({
-      sameCell: false,
-      adjacent: true,
-      distanceKm: 45,
-      walkMinutes: 560,
+    it('suggests walking when the walk is short and the smoke is slow', () => {
+      const near = proximityCopy(
+        { sameCell: true, adjacent: false, distanceKm: 3, walkMinutes: 40 },
+        LIMITS,
+        150,
+      );
+      expect(near.headline).toMatch(/walk over/);
+      expect(near.footnote).toBe('On foot: 40 min.');
     });
-    expect(adjacent.headline).toMatch(/one hill away/);
 
-    const far = proximityCopy({
-      sameCell: false,
-      adjacent: false,
-      distanceKm: 1150,
-      walkMinutes: 14_000,
+    it('refuses to suggest a nine-hour walk, however adjacent', () => {
+      // This is the case that shipped. The old assertion here expected a
+      // "one hill away" headline for a 560-minute walk, which is the bug
+      // written down as a test.
+      const adjacent = proximityCopy(
+        { sameCell: false, adjacent: true, distanceKm: 45, walkMinutes: 560 },
+        LIMITS,
+        150,
+      );
+      expect(adjacent.headline).toBeNull();
+      expect(adjacent.footnote).toMatch(/The sky wins this one/);
     });
-    expect(far).toEqual({ headline: null, footnote: null });
+
+    it('refuses when the smoke is quick enough that walking is silly', () => {
+      // A 55-minute walk beating a 58-minute flight is true and useless.
+      const quick = proximityCopy(
+        { sameCell: true, adjacent: false, distanceKm: 4, walkMinutes: 55 },
+        LIMITS,
+        58,
+      );
+      expect(quick.headline).toBeNull();
+      expect(quick.footnote).toMatch(/The sky wins this one/);
+    });
+
+    it('says nothing at all when they are not close by', () => {
+      const far = proximityCopy(
+        { sameCell: false, adjacent: false, distanceKm: 1150, walkMinutes: 14_000 },
+        LIMITS,
+        2160,
+      );
+      expect(far).toEqual({ headline: null, footnote: null });
+    });
+
+    it('stays quiet about walking when there is no route to compare with', () => {
+      // A walled-off sky has no delivery time, so there is nothing to beat.
+      const stranded = proximityCopy(
+        { sameCell: true, adjacent: false, distanceKm: 3, walkMinutes: 20 },
+        LIMITS,
+        null,
+      );
+      expect(stranded.headline).toBeNull();
+    });
   });
 
   it('summarises a route in three lines or fewer', () => {

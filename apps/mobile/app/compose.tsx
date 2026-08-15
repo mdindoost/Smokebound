@@ -13,6 +13,7 @@
  */
 
 import { towerNameFor } from '@smoke/shared';
+import type { MechanicsView } from '../src/lib/gateway';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
@@ -56,12 +57,16 @@ export default function Compose() {
   const [routeWeather, setRouteWeather] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mechanics, setMechanics] = useState<MechanicsView | null>(null);
 
   useEffect(() => {
     void gateway.listFlock().then((entries) => setFlock(entries.filter((e) => e.status === 'accepted')));
     void gateway
       .mechanics()
-      .then((mechanics) => setCharCap(mechanics.charCap))
+      .then((loaded) => {
+        setCharCap(loaded.charCap);
+        setMechanics(loaded);
+      })
       .catch((err: unknown) => setError((err as Error).message));
   }, [gateway]);
 
@@ -113,7 +118,19 @@ export default function Compose() {
     }
   };
 
-  const proximity = preview !== null ? proximityCopy(preview.proximity) : null;
+  // The walk-over line needs both halves of the comparison: how long the walk
+  // is, and how long the smoke will take (MECHANICS §7.1).
+  const proximity =
+    preview !== null && mechanics !== null
+      ? proximityCopy(
+          preview.proximity,
+          {
+            maxWalkMinutes: mechanics.walkSuggestMaxMinutes,
+            minDeliveryMinutes: mechanics.walkSuggestMinDeliveryMinutes,
+          },
+          preview.totalHours === null ? null : preview.totalHours * 60,
+        )
+      : null;
 
   return (
     <Screen>

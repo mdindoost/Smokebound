@@ -125,6 +125,25 @@ export const MECHANICS_SPEC = {
     note: 'Wind shreds a smoke column\'s shape; it cannot shred a stationary light.',
   },
 
+  // --- MECHANICS §7.1 · the walk-over suggestion --------------------------
+  'proximity.walk_suggest_max_minutes': {
+    value: 60,
+    tune: true,
+    source: 'MECHANICS §7.1',
+    note:
+      'Only suggest walking when the walk is genuinely short. Seen on a device: ' +
+      'the line offered a 10.4-hour walk against a 2.5-hour flight.',
+  },
+  'proximity.walk_suggest_min_delivery_minutes': {
+    value: 60,
+    tune: true,
+    source: 'MECHANICS §7.1',
+    note:
+      '…and only when the smoke is genuinely slow. Both conditions, not just ' +
+      '"walking wins": a 55-minute walk beating a 58-minute flight is a true ' +
+      'statement and useless advice.',
+  },
+
   // --- MECHANICS-V2 §5 · counsel (REDTEAM F37, F38, F42) ------------------
   'counsel.enabled': {
     value: false,

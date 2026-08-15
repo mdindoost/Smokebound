@@ -110,6 +110,9 @@ const VALIDATORS: Record<MechanicsKey, Validator> = {
   'night.blinding_conditions': isConditionList,
   'garble.daylight_only': isBoolean,
 
+  'proximity.walk_suggest_max_minutes': isFiniteNumber,
+  'proximity.walk_suggest_min_delivery_minutes': isFiniteNumber,
+
   // --- MECHANICS-V2 §5 · counsel (REDTEAM F37, F38, F42) ------------------
   'counsel.enabled': isBoolean,
   'counsel.candidate_offsets_hours': isNumberList,

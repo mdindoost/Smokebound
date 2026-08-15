@@ -111,6 +111,12 @@ export interface MechanicsValues {
    */
   'garble.daylight_only': boolean;
 
+  // --- MECHANICS §7.1 · the walk-over suggestion --------------------------
+  /** Longest walk we would ever suggest instead of sending. */
+  'proximity.walk_suggest_max_minutes': number;
+  /** Shortest delivery that makes walking worth mentioning at all. */
+  'proximity.walk_suggest_min_delivery_minutes': number;
+
   // --- MECHANICS-V2 §5 · counsel -----------------------------------------
   'counsel.enabled': boolean;
   /** Hours from now to evaluate as candidate departures. */

@@ -99,20 +99,57 @@ export interface ProximityCopy {
  * Proximity flavour (MECHANICS §7.1). Same cell and adjacent cell both get the
  * "you could just walk over" nudge — the joke only lands if we say it first.
  */
-export function proximityCopy(proximity: {
-  sameCell: boolean;
-  adjacent: boolean;
-  distanceKm: number;
-  walkMinutes: number;
-}): ProximityCopy {
+/**
+ * The "you could just walk over" line (MECHANICS §7.1).
+ *
+ * It used to fire on geography alone — same cell or one cell over — which on a
+ * real device offered a **10.4-hour walk** as an alternative to a 2.5-hour
+ * flight. Cells are 50 km across, so "adjacent" can be a full day on foot.
+ *
+ * Two conditions now, and both must hold:
+ *
+ *  - the walk is genuinely short (`proximity.walk_suggest_max_minutes`), and
+ *  - the smoke is genuinely slow (`proximity.walk_suggest_min_delivery_minutes`).
+ *
+ * Not merely "walking wins". A 55-minute walk beating a 58-minute flight is a
+ * true statement and useless advice, and the joke only lands when the gap is
+ * absurd — which is exactly when someone might really put their shoes on.
+ *
+ * When the sky wins, the line inverts rather than vanishing: the comparison is
+ * the fun part, and the product is happy to lose it out loud.
+ */
+export function proximityCopy(
+  proximity: {
+    sameCell: boolean;
+    adjacent: boolean;
+    distanceKm: number;
+    walkMinutes: number;
+  },
+  limits: { maxWalkMinutes: number; minDeliveryMinutes: number },
+  deliveryMinutes: number | null,
+): ProximityCopy {
   if (!proximity.sameCell && !proximity.adjacent) {
     return { headline: null, footnote: null };
   }
+
+  const walkIsShort = proximity.walkMinutes <= limits.maxWalkMinutes;
+  const smokeIsSlow =
+    deliveryMinutes !== null && deliveryMinutes >= limits.minDeliveryMinutes;
+
+  if (walkIsShort && smokeIsSlow) {
+    return {
+      headline: proximity.sameCell
+        ? 'They are close enough to see your smoke directly. You could just walk over. Send anyway?'
+        : 'They are one hill away. You could walk it. Send anyway?',
+      footnote: `On foot: ${formatWalk(proximity.walkMinutes)}.`,
+    };
+  }
+
+  // Close by, but walking is no bargain. Say so — losing the comparison is
+  // better copy than pretending we never made it.
   return {
-    headline: proximity.sameCell
-      ? 'They are close enough to see your smoke directly. You could just walk over. Send anyway?'
-      : 'They are one hill away. You could walk it. Send anyway?',
-    footnote: `On foot: ${formatWalk(proximity.walkMinutes)}.`,
+    headline: null,
+    footnote: `On foot: ${formatWalk(proximity.walkMinutes)}. The sky wins this one.`,
   };
 }
 
