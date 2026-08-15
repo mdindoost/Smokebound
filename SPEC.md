@@ -77,7 +77,15 @@ Every one of these must look good enough to post:
 2. "Sheltering from a thunderstorm over Ohio — 6h 12m stranded."
 3. A garbled delivered message ("HEEP! THE CAR BROKE DOWN") with wind-damage note.
 4. The lost-smoke memorial screen ("The sky took this one. 412 miles from home.")
-5. Pre-send route preview: "Southern route via Virginia — avoiding a storm system over Pittsburgh. ETA 9:40 PM."
+5. Pre-send route preview: "Southern route via Virginia — avoiding a storm system over Pittsburgh. Arrives in roughly two days."
+
+   *The preview quotes a band, never a clock time (REDTEAM F30).* An exact ETA there was a
+   promise we could only keep by fetching the weather of the entire corridor while the
+   sender waited — and it was false precision besides: no forecast supports "9:40 PM" two
+   days out, and a signal fire does not make appointments. The band widens with distance
+   and with how much of the route we have not yet looked at. The exact arrival time appears
+   in the flight view once the corridor resolves, and push always fires on the real
+   moment.
 
 ## 7. Success criteria & tripwires
 

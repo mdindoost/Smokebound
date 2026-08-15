@@ -72,7 +72,10 @@ export interface WeatherPassStats {
   alertStalenessMinutes: number | null;
 }
 
-const DEFAULT_CONCURRENCY = 4;
+// REDTEAM F31. Operational, not gameplay: concurrency changes no outcome, only
+// how fast we learn the sky. At 4 the measured throughput was 0.94 cells/sec,
+// which put a cross-country preview six minutes past a 45-second timeout.
+const DEFAULT_CONCURRENCY = 12;
 const DEFAULT_JITTER_MS = 250;
 
 export class WeatherCache {
@@ -147,7 +150,21 @@ export class WeatherCache {
     return this.getCellWeather(padded);
   }
 
-  async getCellWeather(cells: readonly CellId[]): Promise<WeatherSnapshot> {
+  /**
+   * What we already know, without asking NWS anything (REDTEAM F28).
+   *
+   * A preview plans on this first so that the candidate route is chosen from
+   * knowledge in hand, and only then spends its budget resolving that route's
+   * own cells.
+   */
+  async getCachedWeather(cells: readonly CellId[]): Promise<WeatherSnapshot> {
+    return this.getCellWeather(cells, { deadline: new Date(0) });
+  }
+
+  async getCellWeather(
+    cells: readonly CellId[],
+    options: { deadline?: Date } = {},
+  ): Promise<WeatherSnapshot> {
     const now = this.now();
     const unique = [...new Set(cells)];
     const stats: WeatherPassStats = {
@@ -202,7 +219,7 @@ export class WeatherCache {
       }
     }
 
-    await this.inBatches(needFetch, async (cell) => {
+    await this.inBatches(needFetch, options.deadline, async (cell) => {
       const fetched = await this.fetchCell(cell, stored.get(cell), now, stats);
       const impassable = isAlerted(cell);
       if (impassable) stats.alerted++;
@@ -368,8 +385,29 @@ export class WeatherCache {
     };
   }
 
-  private async inBatches<T>(items: readonly T[], worker: (item: T) => Promise<void>): Promise<void> {
+  /**
+   * Fetch in batches, stopping when the deadline passes (REDTEAM F28).
+   *
+   * Cells we never reach are simply left out of the snapshot, which is not a
+   * failure: an absent cell is priced at `routing.unknown_cost_mult` and the
+   * route is quoted as a band. The alternative — keep fetching until every cell
+   * is known — is what left someone staring at a spinner for ten minutes.
+   *
+   * The check is between batches rather than mid-flight: a request already sent
+   * is paid for whether or not we wait for it, so we may as well keep the answer.
+   */
+  private async inBatches<T>(
+    items: readonly T[],
+    deadline: Date | undefined,
+    worker: (item: T) => Promise<void>,
+  ): Promise<void> {
     for (let i = 0; i < items.length; i += this.concurrency) {
+      if (deadline !== undefined && this.now().getTime() >= deadline.getTime()) {
+        this.log(
+          `weather: budget spent with ${items.length - i} of ${items.length} cells unfetched`,
+        );
+        return;
+      }
       const batch = items.slice(i, i + this.concurrency);
       await Promise.all(batch.map(worker));
     }

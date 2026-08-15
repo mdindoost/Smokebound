@@ -201,6 +201,7 @@ export default function Compose() {
               {routeSummary({
                 totalHours: preview.totalHours,
                 eta: preview.eta,
+                etaBandPhrase: preview.etaBand?.phrase ?? null,
                 distanceKm: preview.proximity.distanceKm,
                 stormsAvoided: preview.stormsAvoided.length,
                 noRoute: preview.noRoute,

@@ -187,7 +187,8 @@ grace (MECHANICS §6.1) starts when it strands, wherever it stranded.
 ### 6.4 API surface (thin — most reads go straight to Supabase)
 ```
 POST /preview   {recipient, body}
-                → {route, eta, storms_avoided[], preview_token}   preview_token valid 10 min
+                → {route, eta_band, storms_avoided[], unresolved_cells[], preview_token}
+                  preview_token valid 10 min; quotes a band, not an appointment (F30)
 
 POST /send      {recipient, body, preview_token}
                 → engine revalidates flock/blocks, recomputes the route if the weather
@@ -197,12 +198,38 @@ POST /send      {recipient, body, preview_token}
 POST /resend    {message_id} → new message row, fresh route
 ```
 
-**Preview resolves its own unknowns.** A first pass may route through cells whose weather
-we have never fetched — and under fail-open those cells are priced as clear, which makes
-them *attractive*. So `/preview` fetches the weather for every unknown cell on its
-candidate route and re-routes once before returning. A committed route is never priced on
-a guess. (In-flight replanning keeps the plain fail-open behaviour: mid-flight we favour
-availability over precision, per REDTEAM F4.)
+**Preview resolves what it can afford, then quotes honestly** (REDTEAM F28, F29, F30).
+
+The original rule here — fetch every unknown cell on the candidate route before quoting —
+was written because fail-open priced unfetched cells as clear and so made them
+*attractive* to A\*. Measured on a real device that cost six minutes for a cross-country
+route against a 45-second client timeout: the prefetch was buying the whole padded
+corridor while a person watched a spinner.
+
+F29 removed the reason. Never-fetched cells now cost `routing.unknown_cost_mult` (1.15,
+overcast) in edge costs, so the router no longer seeks out sky nobody has looked at.
+`weather.unknown_time_mult` keeps its separate F4 meaning: unknown is never impassable and
+never strands.
+
+So `/preview` now:
+
+1. plans on the weather already cached — no blocking corridor fetch;
+2. spends at most `preview.resolve_budget_seconds` fetching **the candidate route's own
+   cells** (no bounding box, no padding), replanning as answers arrive;
+3. returns whatever it has, pricing the rest, and quotes an **ETA band** whose width grows
+   with route length and with the share of the route still unseen.
+
+The exact arrival time is not withheld — it simply belongs to the flight view, once the
+corridor has resolved, and to push, where the server always knows the moment. The corridor
+breadth a preview used to buy now belongs to the warming cron (§6.1) and to replan passes,
+where latency is nobody's wait.
+
+**Warming** (REDTEAM F31). A fourth cron keeps the sky warm ahead of demand — never a
+full-grid sweep, which at 3,444 traversable cells takes about twice the 30-minute cache
+TTL and would finish every lap already stale. It warms, in order and inside a per-pass
+cell budget: the corridors of messages in the air (+1 padding), then the fires of users
+seen in the last `warming.active_user_days` and the corridors between pairs with recent
+traffic. What it drops is logged, never silently truncated.
 
 **Transports.** The same handlers are exposed two ways, chosen by config: as HTTP
 endpoints, and as a Supabase table-polling worker where the client inserts a request row

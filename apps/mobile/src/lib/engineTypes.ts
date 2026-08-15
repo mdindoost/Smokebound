@@ -34,6 +34,13 @@ export interface PreviewResult {
   proximity: ProximityNote;
   previewToken: string;
   resolvedUnknowns: string[];
+  /**
+   * How long, roughly (REDTEAM F30). The preview quotes this; the exact arrival
+   * time appears in the flight view once the corridor resolves.
+   */
+  etaBand: { lowHours: number; highHours: number; phrase: string } | null;
+  /** Route cells whose weather we never saw before quoting (REDTEAM F28). */
+  unresolvedCells: string[];
 }
 
 export interface EtaWarning {

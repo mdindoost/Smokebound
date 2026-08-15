@@ -67,8 +67,20 @@ export function cellMultipliers(
 ): { weatherMult: number; windMult: number; unknown: boolean } {
   const entry = weather.get(cell);
   if (!entry) {
-    // Not in the snapshot at all: fail open to clear, and say so (MECHANICS §2.1).
-    return { weatherMult: config.get('weather.unknown_time_mult'), windMult: 1, unknown: true };
+    // A cell we have never fetched (REDTEAM F29).
+    //
+    // This used to price at `weather.unknown_time_mult` — 1.0, the fail-open
+    // rule — which made the unexplored sky the cheapest terrain in the graph and
+    // gave A* a positive reason to route through it. Fail-open was written to
+    // answer "may an outage strand a message?" (no, F4). It was never asked
+    // whether the router should *prefer* what nobody has looked at, and the
+    // answer to that is no as well.
+    //
+    // Priced like overcast, unknown terrain is crossable but never inviting, and
+    // a preview no longer has to buy the whole corridor before it dares quote.
+    // Stranding semantics are untouched: this multiplies time, and only
+    // `impassable` can stop a message.
+    return { weatherMult: config.get('routing.unknown_cost_mult'), windMult: 1, unknown: true };
   }
   return {
     weatherMult: entry.timeMult,

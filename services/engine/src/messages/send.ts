@@ -17,6 +17,7 @@ import {
   haversineKm,
   isTraversable,
 } from '@smoke/shared';
+import { bandSpreadFrom, etaBand, etaBandPhrase } from '@smoke/shared';
 import type { CellId, Message, SegmentEta, Uuid } from '@smoke/shared';
 
 import { addMinutes, addHours } from '../engine/clock.js';
@@ -73,8 +74,22 @@ export interface PreviewResult {
   noRoute: boolean;
   proximity: ProximityNote;
   previewToken: string;
-  /** Cells whose weather we fetched specially before quoting (REDTEAM F18). */
+  /** Cells whose weather we fetched specially before quoting (REDTEAM F18, F28). */
   resolvedUnknowns: CellId[];
+  /**
+   * Cells on the quoted route we never got to look at (REDTEAM F28). The band
+   * below widens with them; the route is still committed, because unknown
+   * terrain is crossable — it is merely no longer inviting (F29).
+   */
+  unresolvedCells: CellId[];
+  /**
+   * How long, roughly (REDTEAM F30).
+   *
+   * `eta` remains for the flight view and for push, where the server knows the
+   * exact moment. What a *preview* shows is this: an honest band, phrased the way
+   * the Ledger speaks. Null when there is no route to quote.
+   */
+  etaBand: { lowHours: number; highHours: number; phrase: string } | null;
 }
 
 export interface SendRequest extends PreviewRequest {
@@ -245,6 +260,13 @@ export async function previewMessage(
     waypoints: journey.result.status === 'OK' ? journey.result.waypoints : undefined,
   });
 
+  // How much of the quoted route we actually looked at. The band is honest about
+  // the rest rather than hiding it behind a timestamp (REDTEAM F28, F30).
+  const routeLength = journey.result.status === 'OK' ? journey.result.route.length : 0;
+  const unknownFraction = routeLength === 0 ? 0 : journey.unresolved.length / routeLength;
+  const band =
+    totalHours === null ? null : etaBand(totalHours, unknownFraction, bandSpreadFrom(ctx.config));
+
   const token = signPreviewToken(
     {
       sender: request.senderId,
@@ -271,6 +293,11 @@ export async function previewMessage(
     proximity: proximityFor(ctx, parties.senderHome, parties.recipientHome),
     previewToken: token,
     resolvedUnknowns: journey.resolvedUnknowns,
+    unresolvedCells: journey.unresolved,
+    etaBand:
+      band === null
+        ? null
+        : { lowHours: band.lowHours, highHours: band.highHours, phrase: etaBandPhrase(band) },
   };
 }
 
@@ -318,6 +345,13 @@ export async function sendMessage(ctx: EngineContext, request: SendRequest): Pro
     totalHours,
     waypoints: journey.result.status === 'OK' ? journey.result.waypoints : undefined,
   });
+
+  // How much of the quoted route we actually looked at. The band is honest about
+  // the rest rather than hiding it behind a timestamp (REDTEAM F28, F30).
+  const routeLength = journey.result.status === 'OK' ? journey.result.route.length : 0;
+  const unknownFraction = routeLength === 0 ? 0 : journey.unresolved.length / routeLength;
+  const band =
+    totalHours === null ? null : etaBand(totalHours, unknownFraction, bandSpreadFrom(ctx.config));
 
   const message = await insertMessage(ctx.db, {
     sender: request.senderId,

@@ -57,11 +57,41 @@ export interface MechanicsValues {
   'weather.degraded_cache_ttl_minutes': number;
   /** Beyond this multiple of the TTL a cell is treated as `weather_unknown`. */
   'weather.stale_ttl_multiplier_unknown': number;
-  /** Fail-open multiplier applied to unknown/unfetchable cells. */
+  /**
+   * Fail-open multiplier for a cell NWS has nothing for (REDTEAM F4).
+   *
+   * Stranding semantics only: unknown weather is never impassable. What a
+   * *never-fetched* cell costs the router is `routing.unknown_cost_mult` — a
+   * separate question, split out in REDTEAM F29.
+   */
   'weather.unknown_time_mult': number;
   'weather.time_mult': WeatherTimeMultTable;
   /** Only an active NWS severe warning/watch makes a cell impassable (REDTEAM F2). */
   'weather.severe_alert_impassable': boolean;
+
+  /**
+   * Edge cost for a cell we have never fetched (REDTEAM F29).
+   *
+   * At 1.0 the unexplored sky was the cheapest terrain in the graph and A* had a
+   * positive reason to fly through it. Priced like overcast, it stays crossable
+   * and stops being inviting.
+   */
+  'routing.unknown_cost_mult': number;
+  /** Wall-clock ceiling on resolving unknown cells before a preview (REDTEAM F28). */
+  'preview.resolve_budget_seconds': number;
+
+  // --- REDTEAM F30 · how much certainty a preview claims ------------------
+  'preview.band_base_spread': number;
+  'preview.band_unknown_spread': number;
+  'preview.band_length_spread': number;
+  'preview.band_length_half_life_hours': number;
+
+  // --- REDTEAM F31 · background weather warming --------------------------
+  'warming.interval_minutes': number;
+  /** Ceiling on cells fetched per warming pass, across all priorities. */
+  'warming.cells_per_pass': number;
+  /** How recently a user must have been seen for their fire to be kept warm. */
+  'warming.active_user_days': number;
 
   // --- MECHANICS §2 · speed ----------------------------------------------
   /**

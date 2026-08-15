@@ -56,6 +56,76 @@ export const MECHANICS_SPEC = {
     source: 'MECHANICS §2.1',
     note: 'Stale beyond 2×TTL => weather_unknown, treated as clear.',
   },
+  'routing.unknown_cost_mult': {
+    value: 1.15,
+    tune: true,
+    source: 'REDTEAM F29',
+    note:
+      'Edge cost for a cell we have never fetched. Distinct from ' +
+      'weather.unknown_time_mult, which is the fail-open *stranding* rule: unknown ' +
+      'is never impassable. This key answers a different question the fail-open ' +
+      'rule was never asked — whether A* should PREFER the unexplored. At 1.0 it ' +
+      'did, which is why a preview had to buy the whole corridor before it dared ' +
+      'quote. Priced like overcast, the router routes through sky it understands.',
+  },
+  'preview.resolve_budget_seconds': {
+    value: 10,
+    tune: true,
+    source: 'REDTEAM F28',
+    note:
+      'Hard wall-clock budget for resolving unknown cells on a candidate route. ' +
+      'Whatever is still unknown when it expires is priced at ' +
+      'routing.unknown_cost_mult and the preview returns. A person is waiting.',
+  },
+
+  // --- REDTEAM F30 · how much certainty a preview claims -------------------
+  'preview.band_base_spread': {
+    value: 0.1,
+    tune: true,
+    source: 'REDTEAM F30',
+    note: 'Narrowest a quoted band ever gets, as a fraction either side.',
+  },
+  'preview.band_unknown_spread': {
+    value: 0.34,
+    tune: true,
+    source: 'REDTEAM F30',
+    note: 'Extra spread when every cell on the route is one we never looked at.',
+  },
+  'preview.band_length_spread': {
+    value: 0.15,
+    tune: true,
+    source: 'REDTEAM F30',
+    note: 'Extra spread approached asymptotically as journeys get long.',
+  },
+  'preview.band_length_half_life_hours': {
+    value: 24,
+    tune: true,
+    source: 'REDTEAM F30',
+    note: 'Journey length at which length-driven spread reaches half its maximum.',
+  },
+
+  // --- REDTEAM F31 · keeping the sky warm in the background ---------------
+  'warming.interval_minutes': {
+    value: 5,
+    tune: true,
+    source: 'REDTEAM F31',
+    note: 'How often the warming pass runs. Never a full-grid sweep.',
+  },
+  'warming.cells_per_pass': {
+    value: 400,
+    tune: true,
+    source: 'REDTEAM F31',
+    note:
+      'Ceiling on cells fetched per pass, across all priorities. Bounds both NWS ' +
+      'traffic and the time a pass can hold the fetcher.',
+  },
+  'warming.active_user_days': {
+    value: 7,
+    tune: true,
+    source: 'REDTEAM F31',
+    note: 'A fire is worth keeping warm if its owner has been seen this recently.',
+  },
+
   'weather.unknown_time_mult': {
     value: 1.0,
     tune: false,

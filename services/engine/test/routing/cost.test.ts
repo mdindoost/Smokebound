@@ -6,9 +6,10 @@ import { GRID, MECHANICS_DEFAULTS, formatCellId, haversineKm, cellCenter } from 
 import { describe, expect, it } from 'vitest';
 
 import { heuristicHours, hopDistanceKm, hopHours, windMultiplier } from '../../src/routing/cost.js';
-import { CELLS, CONFIG, weatherFixture } from '../fixtures/weather.js';
+import { CELLS, CONFIG, clearSky, clearSkyWith, weatherFixture } from '../fixtures/weather.js';
 
-const CLEAR = weatherFixture();
+// Observed clear, not merely unobserved — the distinction REDTEAM F29 draws.
+const CLEAR = clearSky();
 
 describe('hop distance', () => {
   it('is about one cell orthogonally and 1.414 cells diagonally', () => {
@@ -68,17 +69,35 @@ describe('weather multipliers act on time, not speed (REDTEAM F11)', () => {
   });
 
   it('prices the cell being entered, not the one being left', () => {
-    const enteringStorm = hopHours(from, to, weatherFixture([[to], { condition: 'snow' }]), CONFIG);
-    const leavingStorm = hopHours(from, to, weatherFixture([[from], { condition: 'snow' }]), CONFIG);
+    // Snow painted on an otherwise observed sky: with an empty base the *other*
+    // cell would be unknown and priced at routing.unknown_cost_mult, which is a
+    // different experiment from the one this test is running.
+    const enteringStorm = hopHours(from, to, clearSkyWith([[to], { condition: 'snow' }]), CONFIG);
+    const leavingStorm = hopHours(from, to, clearSkyWith([[from], { condition: 'snow' }]), CONFIG);
     expect(enteringStorm).toBeGreaterThan(leavingStorm);
     expect(leavingStorm).toBeCloseTo(hopHours(from, to, CLEAR, CONFIG), 9);
   });
 
-  it('fails open to clear for cells missing from the snapshot', () => {
+  it('costs exactly base speed under an observed clear sky', () => {
     expect(hopHours(from, to, CLEAR, CONFIG)).toBeCloseTo(
       hopDistanceKm(from, to) / MECHANICS_DEFAULTS['speed.base_kmh'],
       9,
     );
+  });
+
+  it('prices a cell missing from the snapshot above clear (REDTEAM F29)', () => {
+    // The old assertion here was that an absent cell costs the same as a clear
+    // one. That equality was the bug: it made the unexplored sky the cheapest
+    // terrain in the graph, and A* went looking for it.
+    const unobserved = weatherFixture(); // nothing known anywhere
+    const observed = hopHours(from, to, CLEAR, CONFIG);
+    const guessed = hopHours(from, to, unobserved, CONFIG);
+
+    expect(guessed).toBeGreaterThan(observed);
+    expect(guessed / observed).toBeCloseTo(MECHANICS_DEFAULTS['routing.unknown_cost_mult'], 9);
+    // Still crossable, though — F4's fail-open rule is about stranding, and no
+    // multiplier may make a cell impassable.
+    expect(Number.isFinite(guessed)).toBe(true);
   });
 
   it('computes from km/h, never from the deprecated mph value (REDTEAM F12)', () => {

@@ -69,12 +69,15 @@ export class TableTransport implements EngineTransport {
     if (error) throw new EngineRequestError('TRANSPORT', error.message);
     const requestId = (data as { id: string }).id;
 
-    const row = await this.awaitResponse(requestId);
+    const row = await this.awaitResponse(requestId, kind);
     return unwrap<T>(row);
   }
 
   /** Realtime first, polling underneath it, and a deadline over both. */
-  private async awaitResponse(requestId: string): Promise<ResponseRow> {
+  private async awaitResponse(
+    requestId: string,
+    kind: EngineRequestKind,
+  ): Promise<ResponseRow> {
     const timeoutMs = this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const pollMs = this.options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
@@ -121,7 +124,9 @@ export class TableTransport implements EngineTransport {
         reject(
           new EngineRequestError(
             'TIMEOUT',
-            'The engine did not answer. Your signal may still be lit — check the Ledger.',
+            kind === 'preview'
+              ? 'The sky is taking a while to read. Nothing has been lit — try again in a moment.'
+              : 'The engine did not answer. Your signal may still be lit — check the Ledger.',
           ),
         );
       }, timeoutMs);

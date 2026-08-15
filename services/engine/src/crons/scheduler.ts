@@ -14,6 +14,7 @@ import { runDeliveryCheck } from './deliveryCheck.js';
 import { runDissipation } from './dissipation.js';
 import { runKeeperReplies } from './keeperReply.js';
 import { runReplan } from './replan.js';
+import { runWarming } from './warming.js';
 
 export interface CronHandle {
   stop(): void;
@@ -45,11 +46,15 @@ export function startCrons(ctx: EngineContext): CronHandle {
 
   every(ctx.config.get('routing.replan_interval_minutes'), 'replan', () => runReplan(ctx));
 
+  // REDTEAM F31. Runs often and cheaply; the budget, not the interval, is what
+  // bounds it.
+  every(ctx.config.get('warming.interval_minutes'), 'warming', () => runWarming(ctx));
+
   every(ctx.config.get('routing.dissipation_check_interval_hours') * 60, 'dissipation', () =>
     runDissipation(ctx),
   );
 
-  ctx.log('crons started: delivery-check, replan, dissipation');
+  ctx.log('crons started: delivery-check, replan, warming, dissipation');
 
   return {
     stop(): void {
@@ -60,6 +65,8 @@ export function startCrons(ctx: EngineContext): CronHandle {
 
 /** One pass of every cron, in order. Useful for a manual sweep or a smoke test. */
 export async function runAllCronsOnce(ctx: EngineContext): Promise<void> {
+  // Warming first: everything after it plans better on a warmer sky.
+  await runWarming(ctx);
   await runDeliveryCheck(ctx);
   await runReplan(ctx);
   await runDissipation(ctx);

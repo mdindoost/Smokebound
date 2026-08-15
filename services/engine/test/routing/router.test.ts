@@ -7,9 +7,11 @@ import { areNeighbors, cellsAlongGreatCircle, isLand, isTraversable, parseCellId
 import { describe, expect, it } from 'vitest';
 
 import { planRoute, toSegmentEtas } from '../../src/routing/astar.js';
-import { CELLS, CONFIG, cellRect, colOf, rowOf, weatherFixture } from '../fixtures/weather.js';
+import { CELLS, CONFIG, cellRect, clearSky, colOf, rowOf, weatherFixture } from '../fixtures/weather.js';
 
-const CLEAR = weatherFixture();
+// A sky we have actually looked at. Before REDTEAM F29 an empty snapshot served
+// as "clear", which is what let unexplored terrain price like good weather.
+const CLEAR = clearSky();
 
 /** Wall down column 81 (western PA), north of the corridor. */
 const WALL_COLUMN = 81;
@@ -246,9 +248,16 @@ describe('the ocean rule (MECHANICS §1.1, REDTEAM F13)', () => {
 
 describe('unknown weather is reported, not hidden', () => {
   it('lists route cells whose weather we are guessing', () => {
-    const result = planRoute({ origin: CELLS.newark, dest: CELLS.chicago, weather: CLEAR, config: CONFIG });
+    // An empty snapshot, not `CLEAR`: since REDTEAM F29 those are different skies,
+    // and this test is about the one we have never looked at.
+    const unobserved = weatherFixture();
+    const result = planRoute({
+      origin: CELLS.newark,
+      dest: CELLS.chicago,
+      weather: unobserved,
+      config: CONFIG,
+    });
     if (result.status !== 'OK') throw new Error('expected a route');
-    // Nothing was fetched, so every cell on the route is a guess (fail-open).
     expect(result.unknownCells).toEqual(result.route);
   });
 

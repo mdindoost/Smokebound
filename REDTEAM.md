@@ -145,7 +145,25 @@ alongside the ones they constrain.
 - **V4 — Elegiac state semantics.** Sheltering is calm storm-grey, lost is ash. Drama
   comes from the map and the copy, never from an alarm colour.
 
+## F28 — The preview contract could not survive a cold cache (HIGH, correctness + UX)
+**Attack:** F18 made `/preview` resolve every unknown cell on its candidate route before quoting. Measured on hardware, the first cross-country send (New Jersey → Colorado, 60-cell route) fetched the *padded bounding corridor* — 347 traversable cells at 0.94 cells/sec — and was still working ten minutes later against a 45-second client timeout. Every route beyond a neighbouring cell exceeded the timeout on a cold cache; the Keeper worked only because two cells cost nothing. The implementation also ran up to five resolution rounds where F18 authorised one.
+**Resolution:** One round was the ruling and five was a bug, but **F29 supersedes the mechanism**. `/preview` now fetches only the candidate route's **own cells** — no bounding box, no padding — under a hard **10-second budget**; whatever is still unknown when the budget expires is priced per F29 and the preview returns. The corridor-padding prefetch moves to the warming cron (F31) and to replan passes, where latency is nobody's wait. (ARCHITECTURE §6.4, MECHANICS §1 patched.)
+
+## F29 — Unknown terrain was *attractive*, not merely unpriced (HIGH, correctness — root cause)
+**Attack:** `weather.unknown_time_mult = 1.0` did two unrelated jobs. It was written for F4 — never strand on missing data — but it also made never-fetched cells the **cheapest terrain in the graph**, so A\* actively sought out sky nobody had looked at. F18's expensive prefetch existed only to compensate for this. Nobody had ever ruled that the unexplored should be preferred; it fell out of a rule written for a different purpose.
+**Resolution:** Split into two keys. `weather.unknown_time_mult` **stays 1.0** and keeps its F4 meaning — stranding semantics: unknown is never impassable and never strands. A new `routing.unknown_cost_mult = 1.15` applies **in edge costs only**, so unexplored terrain prices like overcast and A\* stops treating it as a highway. F19's boot guard still holds: the heuristic is keyed to the *smallest* achievable multiplier, and raising a middle value is always safe. This is the root-cause fix and it is what allows F28 to stop paying for the corridor. (MECHANICS §2.1, ARCHITECTURE §6.2 patched.)
+
+## F30 — A signal fire does not make appointments (MEDIUM, product + honesty)
+**Attack:** `/preview` promised a precise arrival time, which is what forced it to block on weather it did not have. The precision was also a fiction: an ETA reading "arrives 1:53 AM" for a medium that takes two days across a continent claims an accuracy no forecast supports.
+**Resolution:** The preview quotes a **band** — "about four hours", "roughly two days", "sometime Tuesday night" — its width scaling with route length and the fraction of the route still unknown, computed **without blocking**. The precise ETA lives in the flight view once the corridor resolves, refined by the replan cron exactly as before. Push timing is unchanged: the server always knows the exact moment. Band phrasing uses the Ledger voice. (SPEC §6.4 and the compose preview copy patched.)
+
+## F31 — Weather warming: yes, prioritised, bounded (MEDIUM, cost + latency)
+**Attack:** Weather was fetched lazily, per corridor, synchronously, while a user waited — there was no warming cron at all. But a naive fix is worse: a full-grid sweep is 3,444 traversable cells, ~61 minutes at measured throughput, against a 30-minute TTL. It would finish each lap with half the grid already stale, burning NWS quota forever and never delivering a warm cache.
+**Resolution:** A warming cron, **never a full-grid sweep**, in priority order: (1) cells on active flight routes, +1 cell padding; (2) home cells of users active in the last 7 days, and the corridors between flock pairs with recent traffic. Interval and per-priority cell budgets live in `mechanics_config` like every other number. Existing NWS backoff and serve-stale (F4) are respected. Fetch concurrency raised 4 → 12: operational only, it changes no outcome, merely how fast we learn the sky. The preview-failure copy is corrected — it claimed "your signal may still be lit", which is true after a send and false after a preview, where nothing was lit and the Ledger is empty. (ARCHITECTURE §6.1 patched.)
+
 ---
 
 ## Verdict
 No unresolved severe findings. F1 and F5 were the two that would have materially hurt launch; both are now v1 scope. Design is cleared for Phase 3 (implementation).
+
+F28–F31 were found by running v1 on a physical device against the live NWS API — a class of failure no test in the suite could reach, because every test ran against a warm or simulated cache. F29 is the one worth remembering: a value written to satisfy one rule (never strand) had quietly acquired a second, unruled meaning (prefer the unexplored), and an expensive mechanism had been built to compensate for a bug nobody had named.

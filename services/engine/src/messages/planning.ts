@@ -1,20 +1,34 @@
 /**
- * Route planning as the lifecycle uses it: fetch the corridor, plan, and — for
- * anything the user is about to commit to — resolve the guesses first.
+ * Route planning as the lifecycle uses it.
  *
- * REDTEAM F18: fail-open prices unfetched cells as clear, which makes unknown
- * terrain *attractive* to A*. A preview that quoted such a route would be
- * promising an ETA through weather nobody has ever looked at. So a committed
- * plan fetches every unknown cell on its candidate route and re-routes once.
- * Mid-flight replanning keeps the plain fail-open behaviour: there, availability
- * beats precision (REDTEAM F4).
+ * F18 made a committed plan resolve every unknown cell on its candidate route
+ * before quoting, because fail-open priced the unexplored as clear and so made
+ * it *attractive* to A*. Measured on real hardware that cost six minutes for a
+ * cross-country route against a 45-second timeout — the prefetch was buying the
+ * whole padded corridor, and doing it while a person waited.
+ *
+ * REDTEAM F29 removed the reason: never-fetched cells now cost
+ * `routing.unknown_cost_mult`, so the router no longer seeks them out and a plan
+ * made in partial knowledge is a reasonable plan rather than a fantasy.
+ *
+ * REDTEAM F28 therefore splits the two callers apart:
+ *
+ *   - **Committing** (preview, send) plans on what is cached, then spends a hard
+ *     `preview.resolve_budget_seconds` on the candidate route's **own cells** —
+ *     no bounding box, no padding — and replans once with whatever arrived.
+ *     Anything still unknown is priced, not waited for.
+ *   - **Replanning** in flight keeps the padded corridor. Nobody is watching a
+ *     spinner there, and breadth is worth more than latency (REDTEAM F4).
+ *
+ * The corridor breadth a preview used to buy has not been abandoned — it moved
+ * to the warming cron (F31), where it runs on our time instead of the user's.
  */
 
 import { planRoute } from '../routing/astar.js';
 import type { RouteResult } from '../routing/astar.js';
 import { snapshotFrom } from '../weather/types.js';
 import type { CellWeather, WeatherSnapshot } from '../weather/types.js';
-import { cellsInBoundingBox, expandWithPadding } from '@smoke/shared';
+import { cellsAlongGreatCircle, cellsInBoundingBox, expandWithPadding } from '@smoke/shared';
 import type { CellId } from '@smoke/shared';
 import type { EngineContext } from '../engine/context.js';
 
@@ -29,6 +43,12 @@ export interface PlannedJourney {
   weather: WeatherSnapshot;
   /** Cells we went back and fetched because the first route relied on guesses. */
   resolvedUnknowns: CellId[];
+  /**
+   * Cells on the committed route we never got to look at before the budget ran
+   * out (REDTEAM F28). Priced, not waited for — and the width of the quoted ETA
+   * band is a function of how many there are (F30).
+   */
+  unresolved: CellId[];
   /** Bad weather in the corridor that the chosen route steers around. */
   stormsAvoided: StormNote[];
 }
@@ -69,8 +89,15 @@ export interface PlanOptions {
    * and replan. Any route we are about to commit to gets this.
    */
   resolveUnknowns: boolean;
-  /** Safety valve on the resolve loop. */
-  maxRounds?: number;
+  /**
+   * Fetch the padded corridor before planning at all.
+   *
+   * Replan passes do; commits do not (REDTEAM F28) — that breadth is the warming
+   * cron's job now, and a person is waiting on a commit.
+   */
+  prefetchCorridor?: boolean;
+  /** Wall-clock ceiling on resolution. Defaults to `preview.resolve_budget_seconds`. */
+  budgetMs?: number;
 }
 
 /** Cells the router used that we have never actually looked at. */
@@ -78,7 +105,14 @@ function neverFetched(weather: WeatherSnapshot, route: readonly CellId[]): CellI
   return route.filter((cell) => weather.get(cell) === undefined);
 }
 
-const DEFAULT_MAX_ROUNDS = 5;
+/**
+ * A backstop, not the control. REDTEAM F28 makes the bound wall-clock — "a hard
+ * time budget of 10 seconds" — precisely because counting rounds is the wrong
+ * unit: one round is too few when a storm line walls off the origin and the
+ * router has to try gap after gap, and five is far too many when each round is
+ * buying a continent. The budget stops it; this only stops a runaway.
+ */
+const MAX_ROUNDS = 12;
 
 export async function planJourney(
   ctx: EngineContext,
@@ -86,38 +120,51 @@ export async function planJourney(
   dest: CellId,
   options: PlanOptions,
 ): Promise<PlannedJourney> {
-  let weather = await ctx.weather.getCorridorWeather(origin, dest);
+  const corridor = cellsAlongGreatCircle(origin, dest);
+
+  // A replan buys breadth; a commit spends only what it already has, then pays
+  // for the route it actually chose (REDTEAM F28).
+  let weather =
+    options.prefetchCorridor === true
+      ? await ctx.weather.getCorridorWeather(origin, dest)
+      : await ctx.weather.getCachedWeather(
+          expandWithPadding(cellsInBoundingBox(corridor), ctx.config.get('grid.prefetch_padding_cells')),
+        );
+
   let result = planRoute({ origin, dest, weather, config: ctx.config });
   const resolvedUnknowns: CellId[] = [];
+  let unresolved: CellId[] = [];
 
-  // REDTEAM F18. Note the distinction: cells we have *never fetched* get fetched
-  // — leaving them as clear guesses is what makes unknown terrain attractive to
-  // A*. Cells that NWS genuinely has nothing for stay failed-open at 1.0×, which
-  // is the rule that keeps an outage from stranding the network (F4).
-  const maxRounds = options.maxRounds ?? DEFAULT_MAX_ROUNDS;
-  for (let round = 0; options.resolveUnknowns && round < maxRounds; round++) {
-    if (result.status !== 'OK') break;
-    const missing = neverFetched(weather, result.route);
-    if (missing.length === 0) break;
+  if (options.resolveUnknowns) {
+    const budgetMs =
+      options.budgetMs ?? ctx.config.get('preview.resolve_budget_seconds') * 1000;
+    const deadline = new Date(ctx.clock.now().getTime() + budgetMs);
 
-    // Fetch the whole region the candidate route crosses, not just the cells it
-    // touches: a storm line makes the router try gap after gap, and resolving one
-    // cell at a time turns that into whack-a-mole.
-    const region = expandWithPadding(
-      cellsInBoundingBox(result.route),
-      ctx.config.get('grid.prefetch_padding_cells'),
-    ).filter((cell) => weather.get(cell) === undefined);
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      if (result.status !== 'OK') break;
+      if (ctx.clock.now().getTime() >= deadline.getTime()) break;
+      const missing = neverFetched(weather, result.route);
+      if (missing.length === 0) break;
 
-    resolvedUnknowns.push(...missing);
-    ctx.log(`plan: fetching ${region.length} never-seen cells before committing a route`);
-    weather = merge(weather, await ctx.weather.getCellWeather(region));
-    result = planRoute({ origin, dest, weather, config: ctx.config });
+      ctx.log(`plan: resolving ${missing.length} unseen cells on the chosen route`);
+      weather = merge(weather, await ctx.weather.getCellWeather(missing, { deadline }));
+      resolvedUnknowns.push(...missing.filter((cell) => weather.get(cell) !== undefined));
+      result = planRoute({ origin, dest, weather, config: ctx.config });
+    }
+
+    // What the budget did not buy. Priced at routing.unknown_cost_mult and
+    // reported, so the quote can widen its band honestly rather than pretend.
+    unresolved = result.status === 'OK' ? neverFetched(weather, result.route) : [];
+    if (unresolved.length > 0) {
+      ctx.log(`plan: quoting with ${unresolved.length} cells still unseen`);
+    }
   }
 
   return {
     result,
     weather,
     resolvedUnknowns,
+    unresolved,
     stormsAvoided: result.status === 'OK' ? stormsAvoided(ctx, weather, result.route) : [],
   };
 }
@@ -134,5 +181,7 @@ export async function replanFrom(
   from: CellId,
   dest: CellId,
 ): Promise<PlannedJourney> {
-  return planJourney(ctx, from, dest, { resolveUnknowns: true });
+  // Breadth here, not latency: this runs on a cron, and a wider corridor is what
+  // lets a stranded message find the gap when the storm moves (REDTEAM F28).
+  return planJourney(ctx, from, dest, { resolveUnknowns: true, prefetchCorridor: true });
 }

@@ -71,7 +71,9 @@ not by weather:
 | Thunderstorm | 6.0 | slow and dramatic, but passable |
 | **NWS severe warning/watch active** | **IMPASSABLE** | cell cost = ∞; triggers detour or stranding |
 
-**Fail-open rule:** cells with missing/unfetchable/stale-beyond-2×TTL weather are treated as clear (1.0×) and flagged `weather_unknown`. Never strand a message on missing data — only on confirmed severe weather.
+**Fail-open rule:** cells with missing/unfetchable/stale-beyond-2×TTL weather are treated as clear (1.0× — `weather.unknown_time_mult`) and flagged `weather_unknown`. Never strand a message on missing data — only on confirmed severe weather.
+
+**Unexplored is not the same as clear** (REDTEAM F29). The fail-open rule above answers one question — *may missing data strand a message?* (no) — and for a long time it was accidentally answering a second one nobody asked: *should the router prefer terrain it has never looked at?* At 1.0× the answer was yes, because a never-fetched cell was the cheapest thing in the graph, and A\* went hunting for it. A cell we have never fetched now costs `routing.unknown_cost_mult` (1.15, the same as overcast) **in edge costs only**. It stays crossable — nothing but an impassable flag may stop a message — it simply stops being inviting.
 
 ### 2.2 Wind
 

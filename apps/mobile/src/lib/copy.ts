@@ -109,6 +109,8 @@ export function deliveredFootnote(distanceKm: number, walkMinutes: number): stri
 export interface RouteSummaryInput {
   totalHours: number | null;
   eta: string | null;
+  /** The honest band (REDTEAM F30). Preferred over `eta` wherever it exists. */
+  etaBandPhrase?: string | null;
   distanceKm: number;
   stormsAvoided: number;
   noRoute: boolean;
@@ -124,9 +126,14 @@ export function routeSummary(input: RouteSummaryInput, now: Date = new Date()): 
     ];
   }
 
+  // REDTEAM F30: a preview quotes a band, not an appointment. The exact minute
+  // is knowable only once the whole corridor has been looked at, and claiming it
+  // beforehand is what made the preview wait for weather it did not have.
   const lines = [
     `${formatDistance(input.distanceKm)} · ${formatDuration(input.totalHours ?? 0)} in the air`,
-    `Arrives ${formatEta(input.eta, now)}`,
+    input.etaBandPhrase != null && input.etaBandPhrase !== ''
+      ? `Arrives in ${input.etaBandPhrase}`
+      : `Arrives ${formatEta(input.eta, now)}`,
   ];
 
   if (input.stormsAvoided > 0) {

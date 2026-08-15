@@ -28,6 +28,10 @@ export function minimumAchievableTimeMultiplier(config: MechanicsConfig): number
   const table = config.get('weather.time_mult');
   const weatherMin = Math.min(
     config.get('weather.unknown_time_mult'),
+    // F29 priced never-fetched cells above clear, which cannot lower the floor —
+    // but a later tune could, and a heuristic that overestimates costs us optimal
+    // routes with no symptom at all. Cheaper to assert than to notice.
+    config.get('routing.unknown_cost_mult'),
     ...Object.values(table),
   );
   return weatherMin * config.get('wind.tailwind_min_mult');

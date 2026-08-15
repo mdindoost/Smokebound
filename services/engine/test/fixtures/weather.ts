@@ -8,6 +8,7 @@
  */
 
 import {
+  GRID,
   MECHANICS_DEFAULTS,
   MechanicsConfig,
   cellId,
@@ -56,6 +57,29 @@ export function weatherFixture(
     for (const cell of cells) byCell.set(cell, cellWeather(cell, patch));
   }
   return snapshotFrom(byCell.values());
+}
+
+/**
+ * A genuinely clear sky over the whole grid.
+ *
+ * `weatherFixture()` with no layers is an *empty* snapshot, and until REDTEAM F29
+ * that was indistinguishable from clear — absent cells were priced at 1.0. It is
+ * not the same thing any more, and it never should have been: "we looked and it
+ * is fine" and "we never looked" are different claims. Tests that mean the first
+ * one say so with this.
+ */
+export function clearSky(): WeatherSnapshot {
+  return clearSkyWith();
+}
+
+/** An observed-clear grid with weather painted over parts of it. */
+export function clearSkyWith(
+  ...layers: [readonly CellId[], WeatherPatch][]
+): WeatherSnapshot {
+  return weatherFixture(
+    [cellRect([0, GRID.rows - 1], [0, GRID.cols - 1]), { condition: 'clear' }],
+    ...layers,
+  );
 }
 
 /** Every cell in an inclusive row/col rectangle. */
