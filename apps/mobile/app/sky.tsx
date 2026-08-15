@@ -28,14 +28,15 @@ import {
 } from '../src/design/components';
 import { sky } from '../src/design/sky';
 import { spacing, stateColor } from '../src/design/tokens';
-import { RouteLine, SmokeMarker } from '../src/map/SmokeTrail';
+import { RouteLine, SmokeMarker, TerminatorLine } from '../src/map/SmokeTrail';
+import { regimeAt, terminatorPath } from '../src/map/NightLayer';
 import { MapToggle } from '../src/map/MapToggle';
 import { SkyPanel } from '../src/map/SkyPanel';
 import { stateLabel } from '../src/lib/copy';
 import { formatEta } from '../src/lib/format';
 import { flightAt, regionFor } from '../src/lib/flight';
 import { useSession } from '../src/lib/session';
-import type { ThreadMessageView } from '../src/lib/gateway';
+import type { ThreadMessageView, MechanicsView } from '../src/lib/gateway';
 
 /** How often the smoke's position is recomputed. Cosmetic only. */
 const TICK_MS = 5_000;
@@ -44,6 +45,7 @@ export default function Sky() {
   const { gateway, profile } = useSession();
   const [messages, setMessages] = useState<ThreadMessageView[]>([]);
   const [radar, setRadar] = useState(true);
+  const [mechanics, setMechanics] = useState<MechanicsView | null>(null);
   const [now, setNow] = useState(() => new Date());
 
   useFocusEffect(
@@ -68,6 +70,10 @@ export default function Sky() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    void gateway.mechanics().then(setMechanics).catch(() => setMechanics(null));
+  }, [gateway]);
+
   const mine = useMemo(
     () => messages.filter((message) => message.direction === 'out'),
     [messages],
@@ -83,6 +89,17 @@ export default function Sky() {
   const region = useMemo(() => regionFor(framed), [framed]);
   const regionKey = useMemo(() => framed.join(','), [framed]);
 
+  // The line between day and night, across whatever the panel is showing.
+  const terminator = useMemo(() => {
+    if (mechanics === null || !mechanics.nightVisuals) return [];
+    return terminatorPath(now, mechanics.twilightElevationDeg, {
+      minLat: region.latitude - region.latitudeDelta / 2,
+      maxLat: region.latitude + region.latitudeDelta / 2,
+      minLng: region.longitude - region.longitudeDelta / 2,
+      maxLng: region.longitude + region.longitudeDelta / 2,
+    });
+  }, [mechanics, now, region]);
+
   return (
     <Screen>
       <Row style={{ justifyContent: 'space-between' }}>
@@ -91,6 +108,7 @@ export default function Sky() {
       </Row>
 
       <SkyPanel region={region} regionKey={regionKey} radar={radar} height={360}>
+        {terminator.length > 1 && <TerminatorLine points={terminator} />}
         {mine.map((message) => {
           const snapshot = flightAt(
             {
@@ -110,6 +128,16 @@ export default function Sky() {
               <SmokeMarker
                 snapshot={snapshot}
                 state={message.state}
+                regime={
+                  snapshot.position === null || mechanics === null
+                    ? 'smoke'
+                    : regimeAt(
+                        now,
+                        snapshot.position,
+                        mechanics.twilightElevationDeg,
+                        mechanics.nightVisuals,
+                      )
+                }
                 onPress={() => router.push(`/flight/${message.id}`)}
               />
             </View>

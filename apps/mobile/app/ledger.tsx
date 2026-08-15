@@ -26,11 +26,13 @@ import {
 import { spacing, stateColor } from '../src/design/tokens';
 import { stateLabel, homeLine } from '../src/lib/copy';
 import { formatSince } from '../src/lib/format';
+import { useNightAt } from '../src/lib/useNight';
 import { useSession } from '../src/lib/session';
 import type { ConversationView } from '../src/lib/gateway';
 
 export default function Ledger() {
   const { gateway, profile } = useSession();
+  const isNightAt = useNightAt(gateway);
   const [conversations, setConversations] = useState<ConversationView[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -59,7 +61,7 @@ export default function Ledger() {
 
       {profile !== null && (
         <Small tone="faint">
-          Signing as @{profile.handle} · {homeLine(profile.homeCell)}
+          Signing as @{profile.handle} · {homeLine(profile.homeCell, isNightAt(profile.homeCell))}
         </Small>
       )}
 

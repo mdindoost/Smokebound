@@ -23,11 +23,13 @@ import {
 import { spacing } from '../src/design/tokens';
 import { validateHandle } from '../src/lib/handle';
 import { homeLine } from '../src/lib/copy';
+import { useNightAt } from '../src/lib/useNight';
 import { useSession } from '../src/lib/session';
 import type { FlockEntry, ProfileView } from '../src/lib/gateway';
 
 export default function Flock() {
   const { gateway } = useSession();
+  const isNightAt = useNightAt(gateway);
   const [entries, setEntries] = useState<FlockEntry[]>([]);
   const [blocked, setBlocked] = useState<ProfileView[]>([]);
   const [handle, setHandle] = useState('');
@@ -172,7 +174,7 @@ export default function Flock() {
                   @{entry.profile.handle}
                   {entry.profile.isSystem === true ? ' · the Keeper' : ''}
                 </Body>
-                <Small tone="faint">{homeLine(entry.profile.homeCell)}</Small>
+                <Small tone="faint">{homeLine(entry.profile.homeCell, isNightAt(entry.profile.homeCell))}</Small>
               </Pressable>
             </View>
           ))

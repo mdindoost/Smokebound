@@ -26,6 +26,21 @@ export const sky = {
   /** The smoke itself: the one thing allowed to glow. */
   trail: palette.emberBright,
   trailGlow: palette.emberGlow,
+  /**
+   * After dark the tower burns a fire, and a fire is a different *kind* of mark
+   * (MECHANICS-V2 §1.3).
+   *
+   * The first attempt distinguished the two regimes by four points of diameter
+   * and nothing else — same colour, same halo — so at 2:56 AM on a real phone a
+   * fire was indistinguishable from a smoke column, and correctly reported as
+   * "still the daytime ember". A regime change has to change what the mark *is*:
+   * smoke is a soft wide column, fire is a small hot point with a wide reach.
+   */
+  fireCore: '#FFE9B8',
+  fireGlow: palette.emberBright,
+  fireHalo: 'rgba(226,128,47,0.28)',
+  /** The line between day and night, drawn on the panel. */
+  terminator: 'rgba(143,160,174,0.55)',
   /** The part of the route not yet flown. */
   ahead: '#4A5C6B',
   /** Where the smoke is sheltering (V4: calm, not alarming). */

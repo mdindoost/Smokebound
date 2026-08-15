@@ -58,3 +58,41 @@ export function regimeLine(regime: Regime, mechanicsEnabled: boolean): string {
     ? 'Burning as a fire now — the far towers see it sooner.'
     : 'Burning as a fire now, against the dark.';
 }
+
+/**
+ * The terminator: the line between day and night, drawn across the panel.
+ *
+ * Found by walking latitudes and, for each one, bisecting longitude for the
+ * place where solar elevation crosses the twilight threshold. Cheap — the sun is
+ * closed-form (MECHANICS-V2 §1.2) — and it turns an abstract mechanic into
+ * something a player can point at: *that* is why the smoke speeds up there.
+ *
+ * Returns an empty list when no crossing exists in view, which over CONUS means
+ * the whole visible region is in one regime.
+ */
+export function terminatorPath(
+  at: Date,
+  twilightElevationDeg: number,
+  bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number },
+  samples = 24,
+): LatLng[] {
+  const points: LatLng[] = [];
+
+  for (let i = 0; i <= samples; i++) {
+    const lat = bounds.minLat + ((bounds.maxLat - bounds.minLat) * i) / samples;
+
+    let low = bounds.minLng;
+    let high = bounds.maxLng;
+    const nightAtLow = isNight(at, { lat, lng: low }, twilightElevationDeg);
+    if (nightAtLow === isNight(at, { lat, lng: high }, twilightElevationDeg)) continue;
+
+    // A crossing is bracketed on this latitude; find it to about a kilometre.
+    for (let step = 0; step < 18; step++) {
+      const mid = (low + high) / 2;
+      if (isNight(at, { lat, lng: mid }, twilightElevationDeg) === nightAtLow) low = mid;
+      else high = mid;
+    }
+    points.push({ lat, lng: (low + high) / 2 });
+  }
+  return points;
+}

@@ -28,15 +28,22 @@ import {
 } from '../../src/design/components';
 import { sky } from '../../src/design/sky';
 import { spacing, stateColor } from '../../src/design/tokens';
-import { RouteLine, SmokeMarker, TowerMark, UnknownWeatherMark } from '../../src/map/SmokeTrail';
+import {
+  RouteLine,
+  SmokeMarker,
+  TerminatorLine,
+  TowerMark,
+  UnknownWeatherMark,
+} from '../../src/map/SmokeTrail';
 import { MapToggle } from '../../src/map/MapToggle';
 import { thinTowers } from '../../src/map/towerDensity';
 import { SkyPanel } from '../../src/map/SkyPanel';
 import { arrivalLabel, stateBlurb, stateLabel } from '../../src/lib/copy';
 import { formatDistance, formatEta, formatSince } from '../../src/lib/format';
 import { confirmedCells, flightAt, regionFor } from '../../src/lib/flight';
+import { crossingsAlong } from '../../src/lib/crossings';
 import { windReading } from '../../src/lib/wind';
-import { regimeAt, regimeLine } from '../../src/map/NightLayer';
+import { regimeAt, regimeInCell, regimeLine, terminatorPath } from '../../src/map/NightLayer';
 import { useSession } from '../../src/lib/session';
 import type { CellWeatherView, MechanicsView, ThreadMessageView } from '../../src/lib/gateway';
 
@@ -111,6 +118,40 @@ export default function Flight() {
     [snapshot.position, now, mechanics],
   );
 
+  const panelRegion = useMemo(() => {
+    const cells = message?.route ?? (message ? [message.originCell] : []);
+    return regionFor(cells);
+  }, [message?.route, message?.originCell]);
+
+  const terminator = useMemo(() => {
+    if (mechanics === null || !mechanics.nightVisuals) return [];
+    return terminatorPath(now, mechanics.twilightElevationDeg, {
+      minLat: panelRegion.latitude - panelRegion.latitudeDelta / 2,
+      maxLat: panelRegion.latitude + panelRegion.latitudeDelta / 2,
+      minLng: panelRegion.longitude - panelRegion.longitudeDelta / 2,
+      maxLng: panelRegion.longitude + panelRegion.longitudeDelta / 2,
+    });
+  }, [mechanics, now, panelRegion]);
+
+  // Sunsets and sunrises the smoke has actually flown through. Derived, not
+  // stored — but only for legs the engine has confirmed (DESIGN.md V7).
+  const crossings = useMemo(
+    () =>
+      message === null || mechanics === null || !mechanics.nightVisuals
+        ? []
+        : crossingsAlong(
+            message.segmentEtas,
+            confirmedCells(
+              message.route ?? [],
+              message.currentLeg,
+              message.state,
+              message.departedAt,
+            ),
+            mechanics.twilightElevationDeg,
+          ),
+    [message, mechanics],
+  );
+
   const conditions = useMemo(
     () =>
       message?.state === 'IN_FLIGHT' || message?.state === 'STRANDED'
@@ -157,9 +198,21 @@ export default function Flight() {
       </Row>
 
       <SkyPanel region={regionFor(route.length > 0 ? route : [message.originCell])} radar={radar} height={340}>
+        {terminator.length > 1 && <TerminatorLine points={terminator} />}
         <RouteLine flown={snapshot.flown} ahead={snapshot.ahead} />
         {showTowers &&
-          mapTowers.map((tower) => <TowerMark key={tower.cell} cell={tower.cell} name={tower.name} />)}
+          mapTowers.map((tower) => (
+            <TowerMark
+              key={tower.cell}
+              cell={tower.cell}
+              name={tower.name}
+              lit={
+                mechanics !== null &&
+                regimeInCell(now, tower.cell, mechanics.twilightElevationDeg, mechanics.nightVisuals) ===
+                  'fire'
+              }
+            />
+          ))}
         {unknownCells.map((cell) => (
           <UnknownWeatherMark key={cell} cell={cell} />
         ))}
@@ -173,7 +226,7 @@ export default function Flight() {
 
       <Card>
         <Body>{message.body ?? ''}</Body>
-        <Small tone="faint">{stateBlurb(message.state, snapshot.awaitingConfirmation)}</Small>
+        <Small tone="faint">{stateBlurb(message.state, snapshot.awaitingConfirmation, regime)}</Small>
         {regime === 'fire' && mechanics !== null && (
           <Small tone="faint">{regimeLine(regime, mechanics.nightMechanics)}</Small>
         )}
@@ -235,6 +288,11 @@ export default function Flight() {
         {passed.map((tower) => (
           <Small key={tower.cell} tone="faint">
             passed the {tower.name} tower
+          </Small>
+        ))}
+        {crossings.map((crossing) => (
+          <Small key={`${crossing.cell}-${crossing.at}`} tone="faint">
+            {crossing.line}
           </Small>
         ))}
       </Card>

@@ -17,7 +17,7 @@ import { View } from 'react-native';
 // so it draws on the centre — moving a storm onto a townsite would claim a
 // precision the forecast does not have.
 import { cellCenter, displayPoint } from '@smoke/shared';
-import type { CellId } from '@smoke/shared';
+import type { CellId, LatLng } from '@smoke/shared';
 
 import { sky } from '../design/sky';
 import type { Regime } from './NightLayer';
@@ -94,25 +94,41 @@ export function SmokeMarker({
     >
       <View
         style={{
-          // A fire is a point of light and reads smaller and brighter; a smoke
-          // column is a shape and reads wider and softer. Same mark, two moods.
-          width: regime === 'fire' ? 30 : 26,
-          height: regime === 'fire' ? 30 : 26,
-          borderRadius: 15,
+          // Smoke is a shape: a soft wide column, its edges indistinct.
+          // Fire is a point: a small hot centre throwing light much further than
+          // its own size. Two different marks, not one mark at two diameters —
+          // the first attempt changed only the width, by four points, and was
+          // correctly reported from a real phone at 2:56 AM as still being the
+          // daytime ember.
+          width: regime === 'fire' ? 34 : 26,
+          height: regime === 'fire' ? 34 : 26,
+          borderRadius: 17,
           alignItems: 'center',
           justifyContent: 'center',
-          // The glow: a wide soft halo, then the ember itself.
-          backgroundColor: state === 'STRANDED' ? sky.shelterHalo : sky.smokeHalo,
+          backgroundColor:
+            state === 'STRANDED'
+              ? sky.shelterHalo
+              : regime === 'fire'
+                ? sky.fireHalo
+                : sky.smokeHalo,
         }}
       >
         <View
           style={{
-            width: 12,
-            height: 12,
+            // The fire's core is small and near-white — the hottest thing on the
+            // map, and the only place that colour appears.
+            width: regime === 'fire' ? 8 : 12,
+            height: regime === 'fire' ? 8 : 12,
             borderRadius: 6,
-            backgroundColor: colour,
-            borderWidth: 1,
-            borderColor: sky.ground,
+            backgroundColor:
+              regime === 'fire' && state !== 'STRANDED' && state !== 'LOST'
+                ? sky.fireCore
+                : colour,
+            borderWidth: regime === 'fire' ? 3 : 1,
+            borderColor:
+              regime === 'fire' && state !== 'STRANDED' && state !== 'LOST'
+                ? sky.fireGlow
+                : sky.ground,
           }}
         />
       </View>
@@ -123,13 +139,26 @@ export function SmokeMarker({
 /**
  * A beacon tower: a squat trapezoid with a light on top. Cosmetic only.
  *
+ * `lit` is the night state (M5.6). A tower stands unlit by day and burns after
+ * dark, which is the same distinction the smoke marker makes and for the same
+ * reason: the map should describe the world the message is crossing, not only
+ * the message.
+ *
  * Drawn on the town rather than the cell centroid, and sized to be findable —
  * the first pass was 8pt wide, smaller than the smoke's inner ember, and the
  * destination tower vanished underneath the smoke at the exact moment of
  * arrival. It sits below the smoke in z-order for the same reason: when the two
  * do overlap, the fire is the thing you came to see.
  */
-export function TowerMark({ cell, name }: { cell: CellId; name: string }) {
+export function TowerMark({
+  cell,
+  name,
+  lit = false,
+}: {
+  cell: CellId;
+  name: string;
+  lit?: boolean;
+}) {
   return (
     <Marker
       coordinate={toLatLng(displayPoint(cell))}
@@ -144,8 +173,11 @@ export function TowerMark({ cell, name }: { cell: CellId; name: string }) {
             width: 5,
             height: 5,
             borderRadius: 3,
-            // Not `trailGlow`: a tower is a landmark, and only the smoke glows.
-            backgroundColor: sky.towerLight,
+            // Lit towers carry a warm lamp; unlit ones are stone. Still never
+            // `trailGlow` — a landmark may be visible without competing with the
+            // signal it exists to frame (DESIGN.md V2).
+            backgroundColor: lit ? sky.tower : sky.towerLight,
+            opacity: lit ? 1 : 0.75,
             marginBottom: 1,
           }}
         />
@@ -220,3 +252,23 @@ const toLatLng = (point: { lat: number; lng: number }): { latitude: number; long
 });
 
 export { toLatLng };
+
+/**
+ * The day/night boundary, drawn as a soft line across the panel (M5.6).
+ *
+ * Deliberately quiet: dashed, cool, and beneath everything. It is context, not a
+ * signal — the map's job here is to let someone see *why* the smoke behaves
+ * differently on one side of it, without competing with the smoke itself.
+ */
+export function TerminatorLine({ points }: { points: readonly LatLng[] }) {
+  if (points.length < 2) return null;
+  return (
+    <Polyline
+      coordinates={points.map(toLatLng)}
+      strokeColor={sky.terminator}
+      strokeWidth={1}
+      lineDashPattern={[3, 5]}
+      zIndex={0}
+    />
+  );
+}

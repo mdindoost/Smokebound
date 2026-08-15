@@ -49,10 +49,17 @@ export const stateLabel = (state: string): string => {
  * Named cells become their town; the handful without a name stay honest rather
  * than inventing one.
  */
-export const homeLine = (cell: string | null | undefined): string => {
+export const homeLine = (
+  cell: string | null | undefined,
+  /** Burning against the dark, where we know it (M5.6). */
+  night = false,
+): string => {
   if (cell === null || cell === undefined || cell === '') return 'fire not yet lit';
   const name = towerNameFor(cell as CellId);
-  return name === null ? 'fire on unnamed ground' : `fire near ${name}`;
+  const where = name === null ? 'unnamed ground' : name;
+  // A fire is a fire either way; at night it is the thing you would actually
+  // see from a hill, and saying so costs a word.
+  return night ? `fire burning near ${where}` : `fire near ${where}`;
 };
 
 /**
@@ -70,9 +77,21 @@ export const arrivalLabel = (direction: 'out' | 'in', delivered: boolean): strin
   return delivered ? 'Reached you' : 'Reaches you';
 };
 
-export const stateBlurb = (state: string, awaitingConfirmation = false): string => {
+export const stateBlurb = (
+  state: string,
+  awaitingConfirmation = false,
+  regime: 'smoke' | 'fire' = 'smoke',
+): string => {
   if (awaitingConfirmation && state === 'IN_FLIGHT') {
     return 'Over the far tower now. Waiting for word that it was read.';
+  }
+  // After dark the message is not smoke at all, and the copy should not keep
+  // calling it that (M5.6). Nothing here claims speed — that needs
+  // `night.enabled` (REDTEAM F32).
+  if (regime === 'fire') {
+    if (state === 'IN_FLIGHT') return 'Your fire is on its way, tower to tower.';
+    if (state === 'TRANSMITTING') return 'The fire speaks in flashes, one breath at a time.';
+    if (state === 'STRANDED') return 'Banked at the edge of a storm. It burns on when the sky does.';
   }
   switch (state) {
     case 'TRANSMITTING':
