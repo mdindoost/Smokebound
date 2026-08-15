@@ -354,11 +354,14 @@ export class PolledTableTransport implements EngineTransport {
   ) {}
 
   async request<T>(kind: EngineRequestKind, payload: Record<string, unknown>): Promise<T> {
+    // Deliberately does NOT pass `requester`: the app relies on the column's
+    // auth.uid() default, and a test double that fills it in by hand cannot see
+    // the RLS failure that behaviour caused in production.
     const inserted = await this.sql.asUser<{ id: string }>(
       this.userId,
-      `insert into public.engine_requests (requester, kind, payload)
-       values ($1, $2, $3::jsonb) returning id`,
-      [this.userId, kind, JSON.stringify(payload)],
+      `insert into public.engine_requests (kind, payload)
+       values ($1, $2::jsonb) returning id`,
+      [kind, JSON.stringify(payload)],
     );
     const requestId = inserted[0]!.id;
 

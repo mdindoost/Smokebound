@@ -53,9 +53,16 @@ export class TableTransport implements EngineTransport {
   ) {}
 
   async request<T>(kind: EngineRequestKind, payload: Record<string, unknown>): Promise<T> {
+    // `requester` also defaults to auth.uid() in the schema, but sending it
+    // explicitly keeps the intent readable — and RLS refuses the row either way
+    // if it does not match the caller.
+    const { data: session } = await this.supabase.auth.getSession();
+    const requester = session.session?.user.id;
+    if (requester === undefined) throw new EngineRequestError('UNAUTHORIZED', 'Sign in first.');
+
     const { data, error } = await this.supabase
       .from('engine_requests')
-      .insert({ kind, payload })
+      .insert({ kind, payload, requester })
       .select('id')
       .single();
 
