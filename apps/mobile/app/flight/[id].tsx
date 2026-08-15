@@ -10,7 +10,14 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { cellCenter, haversineKm, towerNameFor, towerPhrase, towersAlong } from '@smoke/shared';
+import {
+  cellCenter,
+  displayPoint,
+  haversineKm,
+  towerNameFor,
+  towerPhrase,
+  towersAlong,
+} from '@smoke/shared';
 
 import {
   Banner,
@@ -38,6 +45,8 @@ import {
 import { MapToggle } from '../../src/map/MapToggle';
 import { marksForZoom, thinTowers } from '../../src/map/towerDensity';
 import { BreathingEmber } from '../../src/map/BreathingEmber';
+import { NightChain } from '../../src/map/NightChain';
+import { chainFor } from '../../src/map/chain';
 import { emberRadiusFor } from '../../src/design/motion';
 import { SkyPanel } from '../../src/map/SkyPanel';
 import { arrivalLabel, stateBlurb, stateLabel } from '../../src/lib/copy';
@@ -113,13 +122,36 @@ export default function Flight() {
   // view should always answer without being asked.
   // What the tower is burning where the smoke is, right now (REDTEAM F32).
   // Theater: shown whenever night.visuals_enabled, whatever the mechanic does.
-  const regime = useMemo(
+  // Cells the *engine* has confirmed. The chain, and the regime that chooses
+  // between chain and drifting marker, are both anchored here — never on the
+  // interpolated position (DESIGN.md V7, M5.7 handoff rule).
+  const confirmed = useMemo(
     () =>
-      snapshot.position === null || mechanics === null
-        ? 'smoke'
-        : regimeAt(now, snapshot.position, mechanics.twilightElevationDeg, mechanics.nightVisuals),
-    [snapshot.position, now, mechanics],
+      message === null
+        ? []
+        : confirmedCells(
+            message.route ?? [],
+            message.currentLeg,
+            message.state,
+            message.departedAt,
+          ),
+    [message],
   );
+
+  const regime = useMemo(() => {
+    if (mechanics === null) return 'smoke';
+    const anchor = confirmed.at(-1) ?? message?.originCell ?? null;
+    if (anchor === null) return 'smoke';
+    return regimeInCell(now, anchor, mechanics.twilightElevationDeg, mechanics.nightVisuals);
+  }, [confirmed, message?.originCell, now, mechanics]);
+
+  // At night the towers are the signal, so the whole route chain renders —
+  // R22's thinning is a daytime rule about labels (M5.7).
+  const chain = useMemo(
+    () => (regime === 'fire' ? chainFor(message?.route ?? [], confirmed) : []),
+    [regime, message?.route, confirmed],
+  );
+  const blazing = useMemo(() => chain.find((link) => link.phase === 'current') ?? null, [chain]);
 
   const panelRegion = useMemo(() => {
     const cells = message?.route ?? (message ? [message.originCell] : []);
@@ -187,7 +219,6 @@ export default function Flight() {
   // fact told twice, in a weaker voice. And the list is drawn from the engine's
   // `current_leg`, not from interpolation — a tower we merely calculate the
   // smoke to be past has not been passed.
-  const confirmed = confirmedCells(route, message.currentLeg, message.state, message.departedAt);
   const departureTower = towerNameFor(message.originCell);
   const passed = towers.filter(
     (tower) => confirmed.includes(tower.cell) && tower.name !== departureTower,
@@ -210,31 +241,34 @@ export default function Flight() {
       >
         {terminator.length > 1 && <TerminatorLine points={terminator} />}
         <RouteLine flown={snapshot.flown} ahead={snapshot.ahead} />
+        {showTowers && regime === 'fire' && <NightChain links={chain} zoom={zoom} />}
         {showTowers &&
+          regime === 'smoke' &&
           mapTowers.map((tower) => (
             <TowerMark
               key={tower.cell}
               cell={tower.cell}
               name={tower.name}
               passed={snapshot.flown.includes(tower.cell)}
-              lit={
-                mechanics !== null &&
-                regimeInCell(now, tower.cell, mechanics.twilightElevationDeg, mechanics.nightVisuals) ===
-                  'fire'
-              }
             />
           ))}
         {unknownCells.map((cell) => (
           <UnknownWeatherMark key={cell} cell={cell} />
         ))}
+        {/* The breath sits on whatever is currently carrying the signal: the
+            blazing tower after dark, the drifting smoke by day. */}
         {message.state === 'IN_FLIGHT' && (
           <BreathingEmber
-            at={snapshot.position}
+            at={regime === 'fire' ? (blazing ? displayPoint(blazing.cell) : null) : snapshot.position}
             baseRadiusMeters={emberRadiusFor(zoom)}
             regime={regime}
           />
         )}
-        <SmokeMarker snapshot={snapshot} state={message.state} regime={regime} />
+        {/* Fire does not drift (M5.7): after dark the chain is the position, and
+            a travelling dot on top of it would say the same thing wrongly. */}
+        {regime === 'smoke' && (
+          <SmokeMarker snapshot={snapshot} state={message.state} regime={regime} />
+        )}
       </SkyPanel>
 
       <Row style={{ justifyContent: 'space-between' }}>
@@ -299,7 +333,15 @@ export default function Flight() {
         <Caption>The ledger</Caption>
         {message.events.map((event) => (
           <Row key={`${event.kind}-${event.at}`} style={{ justifyContent: 'space-between' }}>
-            <Small>{eventLine(event.kind, event.payload)}</Small>
+            <Small>
+              {eventLine(
+                event.kind,
+                event.payload,
+                mechanics === null
+                  ? 'smoke'
+                  : regimeAtEvent(event, mechanics.twilightElevationDeg, mechanics.nightVisuals),
+              )}
+            </Small>
             <Caption>{formatSince(event.at, now)}</Caption>
           </Row>
         ))}
@@ -325,7 +367,32 @@ export default function Flight() {
   );
 }
 
-function eventLine(kind: string, payload: Record<string, unknown> | null): string {
+/** What the sky was doing where and when an event happened (M5.7). */
+function regimeAtEvent(
+  event: { at: string; payload: Record<string, unknown> | null },
+  twilightElevationDeg: number,
+  visualsEnabled: boolean,
+): 'smoke' | 'fire' {
+  const cell = typeof event.payload?.['cell'] === 'string' ? (event.payload['cell'] as string) : null;
+  if (cell === null) return 'smoke';
+  const at = new Date(event.at);
+  if (Number.isNaN(at.getTime())) return 'smoke';
+  return regimeInCell(at, cell, twilightElevationDeg, visualsEnabled);
+}
+
+/**
+ * One line of the Ledger.
+ *
+ * Keyed on the regime *at the time of the event*, not now (M5.7). A message that
+ * left at dusk and arrives at noon should read as a fire kindled and a smoke
+ * delivered, because that is what happened — the Ledger is a record, and a
+ * record written in this evening's vocabulary is a record of the wrong evening.
+ */
+function eventLine(
+  kind: string,
+  payload: Record<string, unknown> | null,
+  regime: 'smoke' | 'fire' = 'smoke',
+): string {
   const cell = typeof payload?.['cell'] === 'string' ? (payload['cell'] as string) : null;
   const tower = cell === null ? null : towerPhrase(cell);
 
@@ -333,6 +400,11 @@ function eventLine(kind: string, payload: Record<string, unknown> | null): strin
     case 'SENT':
       return 'You lit the fire.';
     case 'DEPARTED':
+      if (regime === 'fire') {
+        return tower === null
+          ? 'The fire was kindled.'
+          : `The fire was kindled at ${tower}.`;
+      }
       return tower === null ? 'The smoke rose.' : `The smoke rose from ${tower}.`;
     case 'STRANDED':
       return tower === null

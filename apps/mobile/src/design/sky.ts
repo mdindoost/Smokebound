@@ -41,6 +41,17 @@ export const sky = {
   fireHalo: 'rgba(226,128,47,0.28)',
   /** The line between day and night, drawn on the panel. */
   terminator: 'rgba(143,160,174,0.55)',
+  /**
+   * The night chain (M5.7): three states of one tower.
+   *
+   * Fire does not drift. A signal's position after dark is *which tower is
+   * burning*, so the map stops moving a dot and starts kindling a line —
+   * embers behind, a blaze at the front, dark stone ahead.
+   */
+  chainPassed: '#C97A34',
+  chainCurrent: '#FFE9B8',
+  chainCurrentRing: palette.emberBright,
+  chainAhead: '#5A6C7A',
   /** The part of the route not yet flown. */
   ahead: '#4A5C6B',
   /** Where the smoke is sheltering (V4: calm, not alarming). */

@@ -268,11 +268,49 @@ be caught. Narrow, and deliberately so — nothing in the design layer can enact
 gameplay, and a multiplier table in a directory of palettes would be visible to
 any reader.
 
+### V11 — Fire does not travel (ruled, M5.7)
+
+Device evidence at 3:29 AM: the night layer worked — fire-styled marker, night
+copy, fires on the home Sky — and the fire **still drifted across the map as a
+dot**. Which is wrong in a way no restyling fixes.
+
+Light does not move along a route. Towers kindle in sequence, and a signal's
+position after dark is **which tower is currently burning**.
+
+So at night:
+
+- **Passed towers** are lit, holding their glow — the trail behind.
+- **The current tower** blazes: the loudest thing on the panel, and the one
+  thing that breathes (V9).
+- **Towers ahead** are dark stone, waiting.
+- **The drifting marker disappears.** There is no travelling spark. The
+  kindling *is* the motion, and a moving dot on top would restate in the wrong
+  idiom the very thing this rendering exists to say.
+
+**Every link is server truth.** The blazing tower is the cell `current_leg` has
+confirmed, never the interpolated position — V7, and the reason is sharper here
+than anywhere else in the app. A dot drifting between waypoints is *obviously*
+an approximation; a **lit tower** is not. It is a claim that the fire reached
+that station, and the client has no business making it.
+
+**Interaction with V8.** By day the map thins towers so the ember stays the
+hero. At night the towers are not labels — they *are* the signal — so the whole
+route chain renders, de-stuttering and all. Zoom still governs their size,
+because a tower seen from orbit is a dot and one seen closely is a landmark.
+
+**Handoff.** When a signal crosses into day the chain hands back to the drifting
+marker at the confirmed leg. No interpolated handoffs.
+
+**The Ledger keys on the regime at the time of the event**, not now: a message
+that left at dusk and arrives at noon reads as a fire kindled and a smoke
+delivered, because that is what happened. A record written in this evening's
+vocabulary is a record of the wrong evening.
+
 ## 5. What is closed, and what is open
 
-**Closed** (V1–V10 above): the sky-panel model, the contained weather family, the bundled
+**Closed** (V1–V11 above): the sky-panel model, the contained weather family, the bundled
 serif, elegiac state semantics, per-platform darkness, towns-for-fires, and the rule that
-the app never narrates past the engine, map marks thin while timelines do not, the ember is the only thing that moves, and visual constants live in the design layer.
+the app never narrates past the engine, map marks thin while timelines do not, the ember is the only thing that moves, visual constants live in the design layer, and fire does not travel.
 
 **Open, for whoever ships M6:**
 
